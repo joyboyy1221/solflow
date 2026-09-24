@@ -62,10 +62,31 @@ export function timeAgo(timestamp) {
   const minutes = Math.floor(seconds / 60);
   if (minutes < 60) return `${minutes}m ago`;
   const hours = Math.floor(minutes / 60);
-  return `${hours}h ago`;
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  return `${days}d ago`;
+}
+
+export function relativeTime(timestamp) {
+  const seconds = Math.floor((Date.now() - timestamp) / 1000);
+  if (seconds < 3) return 'now';
+  if (seconds < 60) return `${seconds}s`;
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m`;
+  const hours = Math.floor(minutes / 60);
+  return `${hours}h`;
 }
 
 export function shortenAddress(address, chars = 4) {
   if (!address) return '';
   return `${address.slice(0, chars)}...${address.slice(-chars)}`;
+}
+
+export function formatTokenAmount(amount, decimals = 2) {
+  if (amount === null || amount === undefined) return '0';
+  if (amount >= 1_000_000) return `${(amount / 1_000_000).toFixed(decimals)}M`;
+  if (amount >= 1_000) return `${(amount / 1_000).toFixed(decimals)}K`;
+  if (amount >= 1) return amount.toFixed(decimals);
+  if (amount >= 0.001) return amount.toFixed(4);
+  return amount.toExponential(2);
 }

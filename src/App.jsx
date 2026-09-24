@@ -1,11 +1,12 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { getSolamiRPC, getSolamiMirage, getSolamiBlur } from './services/solami.js';
-import { METRICS_REFRESH_MS, LEADERBOARD_REFRESH_MS } from './utils/constants.js';
+import { METRICS_REFRESH_MS, TABS } from './utils/constants.js';
 
 import FlowMap from './components/FlowMap/FlowMap.jsx';
 import MetricsBar from './components/Metrics/MetricsBar.jsx';
 import TokenLeaderboard from './components/Leaderboard/TokenLeaderboard.jsx';
 import TradeFeed from './components/TradeFeed/TradeFeed.jsx';
+import WhaleAlerts from './components/WhaleAlerts/WhaleAlerts.jsx';
 import ConnectionStatus from './components/Status/ConnectionStatus.jsx';
 
 export default function App() {
@@ -13,15 +14,27 @@ export default function App() {
   const [trades, setTrades] = useState([]);
   const [metrics, setMetrics] = useState(null);
   const [leaderboard, setLeaderboard] = useState([]);
-  const [activeTab, setActiveTab] = useState('leaderboard');
+  const [dexFlows, setDexFlows] = useState(null);
+  const [whales, setWhales] = useState([]);
+  const [activeTab, setActiveTab] = useState(TABS.LEADERBOARD);
   const [mirageStatus, setMirageStatus] = useState({ connected: false });
   const [blurStatus, setBlurStatus] = useState({ connected: false });
   const [rpcLatency, setRpcLatency] = useState(null);
   const [slotNumber, setSlotNumber] = useState(null);
+  const [uptime, setUptime] = useState(0);
 
   const blurRef = useRef(null);
   const mirageRef = useRef(null);
   const rpcRef = useRef(null);
+  const startTimeRef = useRef(Date.now());
+
+  // Uptime counter
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setUptime(Math.floor((Date.now() - startTimeRef.current) / 1000));
+    }, 1000);
+    return () => clearInterval(interval);
+  }, []);
 
   // Initialize services
   useEffect(() => {
@@ -40,6 +53,11 @@ export default function App() {
 
     const offBlurStatus = blur.on('status', (status) => {
       setBlurStatus(status);
+    });
+
+    // Whale events
+    const offWhale = blur.on('whale', (trade) => {
+      setWhales(prev => [trade, ...prev].slice(0, 50));
     });
 
     // Start Blur stream
@@ -77,6 +95,7 @@ export default function App() {
     return () => {
       offTrade();
       offBlurStatus();
+      offWhale();
       offMirageStatus();
       offSlot();
       blur.stopStream();
@@ -93,12 +112,25 @@ export default function App() {
     const refresh = () => {
       setMetrics(blur.getMetrics());
       setLeaderboard(blur.getLeaderboard());
+      setDexFlows(blur.getDexFlows());
     };
 
     refresh();
     const interval = setInterval(refresh, METRICS_REFRESH_MS);
     return () => clearInterval(interval);
   }, []);
+
+  // Format uptime
+  const formatUptime = (secs) => {
+    const h = Math.floor(secs / 3600);
+    const m = Math.floor((secs % 3600) / 60);
+    const s = secs % 60;
+    if (h > 0) return `${h}h ${m}m`;
+    if (m > 0) return `${m}m ${String(s).padStart(2, '0')}s`;
+    return `${s}s`;
+  };
+
+  const whaleCount = whales.length;
 
   return (
     <div className="app-layout">
@@ -119,11 +151,16 @@ export default function App() {
           </svg>
           <span className="logo-text">SolFlow</span>
           <span className="logo-badge">Live</span>
-          {slotNumber && (
-            <span className="mono text-muted" style={{ fontSize: '0.65rem', marginLeft: 8 }}>
-              Slot #{slotNumber.toLocaleString()}
+          <div className="header-meta">
+            {slotNumber && (
+              <span className="header-slot mono">
+                Slot #{slotNumber.toLocaleString()}
+              </span>
+            )}
+            <span className="header-uptime mono">
+              {formatUptime(uptime)}
             </span>
-          )}
+          </div>
         </div>
 
         <ConnectionStatus
@@ -136,38 +173,61 @@ export default function App() {
       {/* ── Main Content ── */}
       <main className="main-content">
         <MetricsBar metrics={metrics} />
-        <FlowMap trades={trades} />
+        <FlowMap trades={trades} dexFlows={dexFlows} />
       </main>
 
       {/* ── Right Panel ── */}
       <aside className="right-panel">
         <div className="panel-tabs">
           <button
-            className={`panel-tab ${activeTab === 'leaderboard' ? 'active' : ''}`}
-            onClick={() => setActiveTab('leaderboard')}
+            className={`panel-tab ${activeTab === TABS.LEADERBOARD ? 'active' : ''}`}
+            onClick={() => setActiveTab(TABS.LEADERBOARD)}
           >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>
+            </svg>
             Top Tokens
           </button>
           <button
-            className={`panel-tab ${activeTab === 'trades' ? 'active' : ''}`}
-            onClick={() => setActiveTab('trades')}
+            className={`panel-tab ${activeTab === TABS.TRADES ? 'active' : ''}`}
+            onClick={() => setActiveTab(TABS.TRADES)}
           >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
+            </svg>
             Live Trades
+          </button>
+          <button
+            className={`panel-tab ${activeTab === TABS.WHALES ? 'active' : ''}`}
+            onClick={() => setActiveTab(TABS.WHALES)}
+          >
+            <span className="tab-icon-whale">🐋</span>
+            Whales
+            {whaleCount > 0 && (
+              <span className="tab-badge">{whaleCount}</span>
+            )}
           </button>
         </div>
 
-        {activeTab === 'leaderboard' ? (
+        {activeTab === TABS.LEADERBOARD && (
           <TokenLeaderboard leaderboard={leaderboard} />
-        ) : (
+        )}
+        {activeTab === TABS.TRADES && (
           <TradeFeed trades={trades} />
+        )}
+        {activeTab === TABS.WHALES && (
+          <WhaleAlerts whales={whales} />
         )}
 
         <div className="powered-by">
-          Powered by{' '}
-          <a href="https://solami.dev" target="_blank" rel="noopener noreferrer">
+          <span className="powered-label">Powered by</span>
+          <a href="https://solami.dev" target="_blank" rel="noopener noreferrer" className="powered-link">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+              <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
+            </svg>
             Solami
           </a>
-          {' '}· RPC · Mirage · Blur
+          <span className="powered-products">RPC · Mirage · Blur</span>
         </div>
       </aside>
     </div>

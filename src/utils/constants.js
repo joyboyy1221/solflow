@@ -11,6 +11,17 @@ export const DEX_COLORS = {
   'Lifinity': '#f472b6',
 };
 
+// DEX icons (single/double letter abbreviations)
+export const DEX_ICONS = {
+  'Jupiter': 'J',
+  'Raydium': 'R',
+  'Orca': 'O',
+  'Meteora': 'M',
+  'Pump.fun': 'P',
+  'Phoenix': 'Ph',
+  'Lifinity': 'L',
+};
+
 // Token avatar colors (consistent per symbol)
 export function getTokenColor(symbol) {
   const colors = [
@@ -36,3 +47,11 @@ export const FLOW_REFRESH_MS = 1000;
 // Max items in feed
 export const MAX_TRADE_FEED_ITEMS = 100;
 export const MAX_LEADERBOARD_ITEMS = 20;
+export const MAX_WHALE_ALERTS = 50;
+
+// Tab identifiers
+export const TABS = {
+  LEADERBOARD: 'leaderboard',
+  TRADES: 'trades',
+  WHALES: 'whales',
+};

@@ -2,16 +2,20 @@
 
 ![SolFlow](https://img.shields.io/badge/Solana-Live-00FFA3?style=for-the-badge&logo=solana) ![Solami](https://img.shields.io/badge/Powered%20by-Solami-22d3ee?style=for-the-badge) ![License](https://img.shields.io/badge/License-MIT-a78bfa?style=for-the-badge)
 
-**SolFlow** is a stunning, real-time web dashboard that visualizes capital flowing through Solana DEXes. Watch live trades, track token volume leaderboards, and see animated money flow between Jupiter, Raydium, Orca, Meteora, Pump.fun and more — all powered by [Solami](https://solami.dev) infrastructure.
+**SolFlow** is a stunning, real-time web dashboard that visualizes capital flowing through Solana DEXes. Watch live trades, track token volume leaderboards, monitor whale activity, and see animated money flow between Jupiter, Raydium, Orca, Meteora, Pump.fun and more — all powered by [Solami](https://solami.dev) infrastructure.
+
+🔗 **Live Demo**: [https://solflow-gamma.vercel.app/](https://solflow-gamma.vercel.app/)
 
 ## ✨ Features
 
-- 🌊 **Live Flow Visualization** — Animated canvas showing capital moving between DEX protocols in real-time
-- 📊 **Real-Time Metrics** — 24h volume, trade counts, active pools, new launches, and buy/sell pressure
-- 🏆 **Token Leaderboard** — Top 20 tokens ranked by volume with live price changes
-- ⚡ **Trade Feed** — Scrolling feed of every trade with whale detection (🐋 for $10K+ trades)
-- 🔗 **Connection Health** — Live status for all Solami service connections
-- 🎨 **Premium Dark UI** — Glassmorphism, neon glows, smooth animations, responsive layout
+- 🌊 **Live Flow Visualization** — Animated canvas showing capital moving between DEX protocols in real-time with hover tooltips, volume-proportional nodes, and curved gradient connections
+- 📊 **Real-Time Metrics** — 6 live metric cards: 24h volume, trade counts, active pools, new launches, unique wallets, and buy/sell pressure — all with sparklines and animated delta percentages
+- 🏆 **Token Leaderboard** — Top 20 tokens ranked by volume with inline sparkline charts, volume bars, price changes, and hot badges for volatile tokens
+- ⚡ **Trade Feed** — Scrolling feed of every trade with visual hierarchy: whale banners (🐋 $10K+), large trade highlights, token avatars, and side indicators
+- 🐋 **Whale Alerts** — Dedicated whale trade panel with dramatic cards showing token, size, DEX, and time for $10K+ trades
+- 🔗 **Connection Health** — Live status pills for all Solami service connections (Blur, Mirage, RPC) with latency display
+- 🎨 **Premium Dark UI** — Glassmorphism, neon glows, smooth animations, responsive layout for desktop/tablet/mobile
+- ⏱️ **Uptime Counter** — Live session timer and Solana slot number tracking
 
 ## 🔧 Solami Products Used
 
@@ -33,7 +37,7 @@ Pro includes: 2 unmetered gRPC streams, 1 TB Blur data, 200 RPS on RPC.
 ### 2. Clone & Install
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/solflow.git
+git clone https://github.com/joyboyy1221/solflow.git
 cd solflow
 npm install
 ```
@@ -62,19 +66,20 @@ Open [http://localhost:3000](http://localhost:3000) — you'll see live Solana d
 ```
 solflow/
 ├── src/
-│   ├── App.jsx                    # Main dashboard layout
-│   ├── index.css                  # Design system (dark theme, glassmorphism)
+│   ├── App.jsx                        # Main dashboard layout (3-tab sidebar)
+│   ├── index.css                      # Design system v3.0 (dark theme, glassmorphism, responsive)
 │   ├── services/
-│   │   └── solami.js              # Solami API client (RPC, Mirage, Blur)
+│   │   └── solami.js                  # Solami API client (RPC, Mirage, Blur + DEX tracking)
 │   ├── components/
-│   │   ├── FlowMap/FlowMap.jsx    # Animated Canvas flow visualization
-│   │   ├── Metrics/MetricsBar.jsx # Real-time metrics cards
-│   │   ├── Leaderboard/          # Token ranking by volume
-│   │   ├── TradeFeed/            # Live trade stream
-│   │   └── Status/               # Connection health indicators
+│   │   ├── FlowMap/FlowMap.jsx        # Interactive Canvas flow visualization with tooltips
+│   │   ├── Metrics/MetricsBar.jsx     # Animated real-time metrics cards with sparklines
+│   │   ├── Leaderboard/              # Token ranking with volume bars & sparklines
+│   │   ├── TradeFeed/                # Live trade stream with whale detection
+│   │   ├── WhaleAlerts/              # Dedicated whale trade alert panel
+│   │   └── Status/                   # Connection health indicators with Solami branding
 │   └── utils/
-│       ├── formatters.js          # Number/currency/time formatting
-│       └── constants.js           # Colors, thresholds, config
+│       ├── formatters.js              # Number/currency/time/relative formatting
+│       └── constants.js               # Colors, thresholds, tabs, config
 ├── .env.example
 ├── package.json
 └── vite.config.js
@@ -83,16 +88,19 @@ solflow/
 ## 🏗️ Architecture
 
 ```
-┌──────────────────────────────────────────────┐
-│             Frontend (Vite + React)          │
-│                                              │
-│  FlowMap ← Canvas    MetricsBar ← Cards     │
-│  Leaderboard ← Rows  TradeFeed ← Scroll     │
-│                                              │
-│              ┌─────────────┐                 │
-│              │  Data Layer  │                 │
-│              └──────┬──────┘                 │
-└─────────────────────┼────────────────────────┘
+┌──────────────────────────────────────────────────┐
+│             Frontend (Vite + React)              │
+│                                                  │
+│  FlowMap ← Interactive Canvas with hover tooltips│
+│  MetricsBar ← 6 animated cards with sparklines  │
+│  Leaderboard ← Volume bars + inline charts      │
+│  TradeFeed ← Visual hierarchy + whale banners    │
+│  WhaleAlerts ← Dramatic $10K+ trade cards        │
+│                                                  │
+│              ┌─────────────┐                     │
+│              │  Data Layer  │                     │
+│              └──────┬──────┘                     │
+└─────────────────────┼────────────────────────────┘
                       │
          ┌────────────┼──────────────┐
     ┌────┴─────┐ ┌────┴─────┐ ┌─────┴─────┐
@@ -106,8 +114,9 @@ solflow/
 
 - **Color Palette**: Deep navy background (#060a13), cyan/purple gradients, green/red for buy/sell
 - **Typography**: Inter for UI, JetBrains Mono for data values
-- **Effects**: Glassmorphism cards, neon glow animations, particle trails
-- **Responsive**: Full dashboard on desktop, stacked layout on tablet
+- **Effects**: Glassmorphism cards, neon glow animations, particle trails, hover tooltips
+- **Responsive**: Full dashboard on desktop, stacked layout on tablet, optimized for mobile
+- **Components**: 6 metric cards, interactive flow map, 3-tab sidebar (Leaderboard/Trades/Whales)
 
 ## 📜 License
 
