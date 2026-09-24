@@ -1,5 +1,3 @@
-import WebSocket from 'ws';
-
 export const config = {
   supportsResponseStreaming: true,
 };
@@ -15,7 +13,7 @@ export default function handler(req, res) {
   const wsUrl = `wss://ws.solami.dev/data/subscribe?chain=solana&api_key=${dataKey}`;
   const ws = new WebSocket(wsUrl);
 
-  ws.on('open', () => {
+  ws.onopen = () => {
     ws.send(JSON.stringify({
       filter: {
         types: ['swap'],
@@ -23,28 +21,28 @@ export default function handler(req, res) {
       }
     }));
     res.write(`data: ${JSON.stringify({ status: 'connected', live: true })}\n\n`);
-  });
+  };
 
-  ws.on('message', (data) => {
+  ws.onmessage = (event) => {
     try {
-      const str = data.toString();
+      const str = typeof event.data === 'string' ? event.data : String(event.data);
       res.write(`data: ${str}\n\n`);
     } catch (e) {
       /* ignore */
     }
-  });
+  };
 
-  ws.on('error', (err) => {
-    res.write(`data: ${JSON.stringify({ error: err.message })}\n\n`);
-  });
+  ws.onerror = (err) => {
+    res.write(`data: ${JSON.stringify({ error: 'WebSocket error' })}\n\n`);
+  };
 
-  ws.on('close', () => {
+  ws.onclose = () => {
     res.write(`data: ${JSON.stringify({ status: 'disconnected' })}\n\n`);
     res.end();
-  });
+  };
 
   req.on('close', () => {
-    if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
+    if (ws.readyState === 1 || ws.readyState === 0) {
       ws.close();
     }
   });
