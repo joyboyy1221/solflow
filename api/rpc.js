@@ -12,10 +12,7 @@ export default async function handler(req, res) {
     return;
   }
 
-  const apiKey = process.env.SOLAMI_API_KEY || process.env.VITE_SOLAMI_API_KEY || '';
-  if (!apiKey) {
-    return res.status(500).json({ error: 'Missing SOLAMI_API_KEY environment variable' });
-  }
+  const apiKey = process.env.SOLAMI_API_KEY || process.env.VITE_SOLAMI_API_KEY || 'rpc_XEAFtI0B346XWkuR';
 
   try {
     const response = await fetch(`https://rpc.solami.dev/sol?api_key=${apiKey}`, {

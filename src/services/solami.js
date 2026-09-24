@@ -28,31 +28,37 @@ export class SolamiRPC {
     this.requestId++;
     const start = performance.now();
     try {
-      let res;
-      try {
-        res = await fetch('/api/rpc', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            jsonrpc: '2.0',
-            id: this.requestId,
-            method,
-            params,
-          }),
-        });
-        if (!res.ok) throw new Error(`Proxy status ${res.status}`);
-      } catch (proxyErr) {
-        res = await fetch(this.url, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            jsonrpc: '2.0',
-            id: this.requestId,
-            method,
-            params,
-          }),
-        });
+      const res = await fetch('/api/rpc', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          id: this.requestId,
+          method,
+          params,
+        }),
+      });
+
+      if (!res.ok) {
+        if (this.apiKey) {
+          const directRes = await fetch(this.url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              jsonrpc: '2.0',
+              id: this.requestId,
+              method,
+              params,
+            }),
+          });
+          const data = await directRes.json();
+          const latency = Math.round(performance.now() - start);
+          if (data.error) throw new Error(data.error.message);
+          return { result: data.result, latency };
+        }
+        throw new Error(`Server RPC proxy error: ${res.status}`);
       }
+
       const data = await res.json();
       const latency = Math.round(performance.now() - start);
       if (data.error) throw new Error(data.error.message);
@@ -80,7 +86,7 @@ export class SolamiRPC {
 export class SolamiMirage {
   constructor(apiKey = API_KEY) {
     this.apiKey = apiKey;
-    this.url = `${ENDPOINTS.mirageWs}?api_key=${apiKey}`;
+    this.url = apiKey ? `${ENDPOINTS.mirageWs}?api_key=${apiKey}` : '';
     this.ws = null;
     this.listeners = new Map();
     this.reconnectAttempts = 0;
@@ -91,6 +97,13 @@ export class SolamiMirage {
 
   connect() {
     return new Promise((resolve, reject) => {
+      if (!this.apiKey) {
+        console.log('[SolFlow] Mirage running in server proxy mode');
+        this.connected = true;
+        this._emit('status', { connected: true });
+        return resolve();
+      }
+
       try {
         this.ws = new WebSocket(this.url);
 

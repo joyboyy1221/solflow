@@ -10,11 +10,7 @@ export default function handler(req, res) {
   res.setHeader('Connection', 'keep-alive');
   res.setHeader('Access-Control-Allow-Origin', '*');
 
-  const dataKey = process.env.SOLAMI_DATA_KEY || process.env.VITE_SOLAMI_DATA_KEY || '';
-  if (!dataKey) {
-    res.write(`data: ${JSON.stringify({ error: 'Missing SOLAMI_DATA_KEY environment variable' })}\n\n`);
-    return res.end();
-  }
+  const dataKey = process.env.SOLAMI_DATA_KEY || process.env.VITE_SOLAMI_DATA_KEY || 'sk_0_h0c-ej0GMLeICeCJTRB0BHJW1oXK7PnZVeKb8Z_KQ';
 
   const wsUrl = `wss://ws.solami.dev/data/subscribe?chain=solana&api_key=${dataKey}`;
   const ws = new WebSocket(wsUrl);
