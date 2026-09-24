@@ -10,10 +10,12 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "isomorphic-git": "^1.42.2",
+    "lightweight-charts": "^4.2.2",
+    "lucide-react": "^0.511.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
-    "lightweight-charts": "^4.2.2",
-    "lucide-react": "^0.511.0"
+    "ws": "^8.21.3"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.5.2",
