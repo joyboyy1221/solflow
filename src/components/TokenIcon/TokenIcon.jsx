@@ -48,6 +48,7 @@ export default function TokenIcon({ symbol, size = 26, className = '' }) {
           alt={symbol}
           width={size}
           height={size}
+          referrerPolicy="no-referrer"
           style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }}
           onError={() => {
             setImgFailed(true);
