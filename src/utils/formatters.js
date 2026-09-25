@@ -90,3 +90,12 @@ export function formatTokenAmount(amount, decimals = 2) {
   if (amount >= 0.001) return amount.toFixed(4);
   return amount.toExponential(2);
 }
+
+export function formatCompactNumber(value) {
+  if (value === null || value === undefined || value === 0) return '0';
+  if (value >= 1_000_000_000) return `${(value / 1_000_000_000).toFixed(2)}B`;
+  if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(2)}M`;
+  if (value >= 1_000) return `${(value / 1_000).toFixed(1)}K`;
+  if (value >= 1) return value.toFixed(2);
+  return value.toFixed(4);
+}

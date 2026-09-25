@@ -14,10 +14,11 @@ export default function handler(req, res) {
   const ws = new WebSocket(wsUrl);
 
   ws.onopen = () => {
+    // Subscribe to ALL event types — swap, surge, radar, graduation, token_create, liquidity
     ws.send(JSON.stringify({
       filter: {
-        types: ['swap'],
-        min_volume_usd: 1.0,
+        types: ['swap', 'surge', 'radar', 'graduation', 'token_create', 'liquidity'],
+        min_volume_usd: 0.5,
       }
     }));
     res.write(`data: ${JSON.stringify({ status: 'connected', live: true })}\n\n`);

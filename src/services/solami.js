@@ -328,34 +328,36 @@ function normalizeDexName(raw) {
 }
 
 /**
+ * Determine the Blur event type from a message object.
+ * Returns: 'swap' | 'surge' | 'radar' | 'graduation' | 'token_create' | 'trending' | 'liquidity' | 'unknown'
+ */
+function getBlurEventType(data) {
+  if (!data || typeof data !== 'object') return 'unknown';
+  const t = (data.type || data.event || data.kind || '').toLowerCase();
+  if (t === 'swap' || t === 'trade') return 'swap';
+  if (t === 'surge') return 'surge';
+  if (t === 'radar') return 'radar';
+  if (t === 'graduation' || t === 'graduate') return 'graduation';
+  if (t === 'token_create' || t === 'launch' || t === 'new_token') return 'token_create';
+  if (t === 'trending' || t === 'snapshot') return 'trending';
+  if (t === 'liquidity' || t === 'lp') return 'liquidity';
+  if (t === 'candle') return 'candle';
+  return 'unknown';
+}
+
+/**
  * Parse a real Blur WebSocket swap event into our trade format.
  * Handles multiple event formats robustly without crashing.
  */
 let _debugLogCount = 0;
 
-function parseBlurSwapEvent(event) {
+function parseBlurSwapEvent(data) {
   try {
-    if (!event || typeof event !== 'object') return null;
-
-    // Unwrap nested data field if present
-    const data = event.data && typeof event.data === 'object' ? event.data : event;
-
-    // Log first 5 events for debugging
-    if (_debugLogCount < 5) {
-      console.log(`[Blur] Event #${_debugLogCount + 1} keys:`, Object.keys(data).join(', '));
-      console.log(`[Blur] Event #${_debugLogCount + 1} sample:`, JSON.stringify(data).slice(0, 400));
-      _debugLogCount++;
-    }
-
-    // Skip non-swap events (metadata, stats, heartbeats, etc.)
-    const eventType = safeStr(data, 'type', 'event', 'kind', 'action').toLowerCase();
-    if (eventType && !['swap', 'trade', 'buy', 'sell', ''].includes(eventType)) {
-      return null; // Skip non-trade events silently
-    }
+    if (!data || typeof data !== 'object') return null;
 
     // Extract token info — try many possible field names
-    const symbol = safeStr(data, 'token_symbol', 'symbol', 'base_symbol', 'tokenSymbol',
-      'base_token_symbol', 'token', 'base') || 'UNKNOWN';
+    const symbol = (safeStr(data, 'token_symbol', 'symbol', 'base_symbol', 'tokenSymbol',
+      'base_token_symbol', 'token', 'base') || 'UNKNOWN').toUpperCase();
     const tokenName = safeStr(data, 'token_name', 'name', 'tokenName', 'base_token_name',
       'base_name') || symbol;
     const priceUsd = safeNum(data, 'price_usd', 'price', 'priceUsd', 'token_price',
@@ -364,7 +366,7 @@ function parseBlurSwapEvent(event) {
       'size_usd', 'trade_size', 'notional', 'value_usd', 'swap_amount_usd');
 
     // Determine trade side
-    const rawSide = safeStr(data, 'side', 'type', 'direction', 'action', 'trade_type').toLowerCase();
+    const rawSide = safeStr(data, 'side', 'direction', 'action', 'trade_type').toLowerCase();
     const side = rawSide.includes('buy') || rawSide.includes('long') ? 'buy' : 'sell';
 
     // Determine DEX
@@ -385,6 +387,19 @@ function parseBlurSwapEvent(event) {
       ts.buyPressure = Math.max(0.1, Math.min(0.9, ts.buyPressure + (side === 'buy' ? 0.003 : -0.003)));
       ts.priceHistory.push(ts.price);
       if (ts.priceHistory.length > 24) ts.priceHistory.shift();
+    } else if (symbol !== 'UNKNOWN') {
+      // Dynamically register new tokens from live data
+      tokenState.set(symbol, {
+        symbol,
+        name: tokenName,
+        basePrice: priceUsd || 0,
+        price: priceUsd || 0,
+        volume24h: sizeUsd,
+        trades24h: 1,
+        change24h: 0,
+        buyPressure: side === 'buy' ? 0.55 : 0.45,
+        priceHistory: priceUsd > 0 ? [priceUsd] : [],
+      });
     }
 
     // Update DEX volume
@@ -418,10 +433,176 @@ function parseBlurSwapEvent(event) {
       source: 'blur-live',
     };
   } catch (err) {
-    // Silently skip unparseable events — don't spam console
     return null;
   }
 }
+
+/**
+ * Parse a surge/radar breakout event from Blur
+ */
+function parseSurgeEvent(data, type = 'surge') {
+  try {
+    if (!data || typeof data !== 'object') return null;
+    const symbol = (safeStr(data, 'symbol', 'token_symbol', 'token', 'base_symbol') || 'UNKNOWN').toUpperCase();
+    const tokenName = safeStr(data, 'name', 'token_name', 'tokenName') || symbol;
+    const mint = safeStr(data, 'mint', 'token_address', 'base_mint') || null;
+    const volumeUsd = safeNum(data, 'volume_usd', 'volume', 'volumeUsd', 'total_volume');
+    const priceUsd = safeNum(data, 'price_usd', 'price', 'priceUsd');
+    const priceChange = safeNum(data, 'price_change_pct', 'price_change', 'change_pct', 'change');
+    const trades = safeNum(data, 'trades', 'trade_count', 'num_trades');
+    const multiplier = safeNum(data, 'multiplier', 'surge_multiplier', 'factor', 'x');
+    const buys = safeNum(data, 'buys', 'buy_count');
+    const sells = safeNum(data, 'sells', 'sell_count');
+    const mcap = safeNum(data, 'mcap', 'market_cap', 'marketCap', 'mcap_at_trigger');
+    const logoUrl = safeStr(data, 'logo', 'image', 'icon', 'logo_uri', 'image_uri');
+
+    if (logoUrl && symbol !== 'UNKNOWN') {
+      registerTokenLogo(symbol, logoUrl);
+    }
+
+    return {
+      id: `${type}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      type, // 'surge' or 'radar'
+      timestamp: data.timestamp ? (data.timestamp > 1e12 ? data.timestamp : data.timestamp * 1000) : Date.now(),
+      symbol,
+      tokenName,
+      mint,
+      volumeUsd,
+      priceUsd,
+      priceChange,
+      trades,
+      multiplier: multiplier || (type === 'surge' ? 3 : 1.8),
+      buys,
+      sells,
+      mcap,
+      logoUrl,
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Parse a graduation event from Blur
+ */
+function parseGraduationEvent(data) {
+  try {
+    if (!data || typeof data !== 'object') return null;
+    const symbol = (safeStr(data, 'symbol', 'token_symbol', 'token') || 'UNKNOWN').toUpperCase();
+    const tokenName = safeStr(data, 'name', 'token_name', 'tokenName') || symbol;
+    const mint = safeStr(data, 'mint', 'token_address', 'base_mint') || null;
+    const fromDex = safeStr(data, 'from', 'source_dex', 'launchpad', 'source', 'from_dex') || 'Pump.fun';
+    const toDex = safeStr(data, 'to', 'dest_dex', 'destination', 'target', 'to_dex') || 'Raydium';
+    const priceUsd = safeNum(data, 'price_usd', 'price', 'priceUsd');
+    const mcap = safeNum(data, 'mcap', 'market_cap', 'marketCap');
+    const liquidity = safeNum(data, 'liquidity', 'lp_usd', 'pool_size');
+    const logoUrl = safeStr(data, 'logo', 'image', 'icon', 'logo_uri', 'image_uri');
+    const progress = safeNum(data, 'progress', 'completion', 'pct') || 100;
+
+    if (logoUrl && symbol !== 'UNKNOWN') {
+      registerTokenLogo(symbol, logoUrl);
+    }
+
+    return {
+      id: `grad-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      type: 'graduation',
+      timestamp: data.timestamp ? (data.timestamp > 1e12 ? data.timestamp : data.timestamp * 1000) : Date.now(),
+      symbol,
+      tokenName,
+      mint,
+      fromDex,
+      toDex,
+      priceUsd,
+      mcap,
+      liquidity,
+      logoUrl,
+      progress,
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Parse trending/snapshot data — these contain arrays of top tokens
+ */
+function parseTrendingData(data) {
+  try {
+    if (!data || typeof data !== 'object') return [];
+    const items = data.data || data.tokens || data.items || [];
+    if (!Array.isArray(items)) return [];
+    
+    const trades = [];
+    for (const item of items) {
+      if (!item || typeof item !== 'object') continue;
+      
+      const symbol = (safeStr(item, 'symbol', 'token_symbol', 'token') || '').toUpperCase();
+      if (!symbol || symbol === 'UNKNOWN') continue;
+      
+      const tokenName = safeStr(item, 'name', 'token_name') || symbol;
+      const priceUsd = safeNum(item, 'price_usd', 'price', 'priceUsd');
+      const volumeUsd = safeNum(item, 'volume_usd', 'volume', 'volumeUsd');
+      const priceChange = safeNum(item, 'price_change_pct', 'price_change', 'change_pct');
+      const tradeCount = safeNum(item, 'trades', 'trade_count');
+      const buys = safeNum(item, 'buys', 'buy_count');
+      const sells = safeNum(item, 'sells', 'sell_count');
+      const mint = safeStr(item, 'mint', 'token_address') || null;
+      const logoUrl = safeStr(item, 'image', 'logo', 'icon', 'logo_uri', 'image_uri');
+      
+      // Register logo
+      if (logoUrl) {
+        registerTokenLogo(symbol, logoUrl);
+      }
+      
+      // Update or create token state
+      const existing = tokenState.get(symbol);
+      if (existing) {
+        if (priceUsd > 0) existing.price = priceUsd;
+        if (volumeUsd > 0) existing.volume24h = Math.max(existing.volume24h, volumeUsd);
+        if (tradeCount > 0) existing.trades24h = Math.max(existing.trades24h, tradeCount);
+        if (priceChange) existing.change24h = priceChange;
+        if (buys + sells > 0) existing.buyPressure = buys / Math.max(1, buys + sells);
+        existing.priceHistory.push(existing.price);
+        if (existing.priceHistory.length > 24) existing.priceHistory.shift();
+      } else {
+        tokenState.set(symbol, {
+          symbol,
+          name: tokenName,
+          basePrice: priceUsd || 0,
+          price: priceUsd || 0,
+          volume24h: volumeUsd || 0,
+          trades24h: tradeCount || 0,
+          change24h: priceChange || 0,
+          buyPressure: buys + sells > 0 ? buys / (buys + sells) : 0.5,
+          priceHistory: priceUsd > 0 ? [priceUsd] : [],
+        });
+      }
+      
+      // Generate a trade event from trending data
+      const side = buys >= sells ? 'buy' : 'sell';
+      const sizeUsd = volumeUsd > 0 ? volumeUsd / Math.max(1, tradeCount) : 50;
+      
+      trades.push({
+        id: `trend-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        timestamp: Date.now(),
+        token: symbol,
+        tokenName,
+        side,
+        price: priceUsd,
+        sizeUsd: Math.min(sizeUsd, 100000),
+        sizeTokens: priceUsd > 0 ? sizeUsd / priceUsd : 0,
+        dex: 'Jupiter',
+        isWhale: sizeUsd >= 10_000,
+        mint,
+        source: 'blur-live',
+      });
+    }
+    return trades;
+  } catch {
+    return [];
+  }
+}
+
 
 export class SolamiBlur {
   constructor(apiKey = DATA_KEY) {
@@ -432,8 +613,13 @@ export class SolamiBlur {
     this.connected = false;
     this.isLive = false;
     this.whaleTradeHistory = [];
+    this.surgeAlerts = [];
+    this.radarAlerts = [];
+    this.graduations = [];
     this._shouldReconnect = true;
     this.reconnectAttempts = 0;
+    this.blurLatency = null;
+    this._lastBlurMsg = 0;
   }
 
   /**
@@ -470,6 +656,105 @@ export class SolamiBlur {
   }
 
   /**
+   * Process a single Blur message — routes by event type
+   */
+  _processBlurMessage(msg) {
+    if (!msg || typeof msg !== 'object') return;
+
+    const eventType = getBlurEventType(msg);
+
+    // Log first few events for debugging
+    if (!this._debugCount) this._debugCount = 0;
+    if (this._debugCount < 8) {
+      console.log(`[Blur] Event type="${eventType}" keys:`, Object.keys(msg).join(', '));
+      this._debugCount++;
+    }
+
+    // Measure latency from generated_at timestamp
+    const genAt = msg.generated_at || msg.timestamp;
+    if (genAt) {
+      const t = typeof genAt === 'number' ? (genAt > 1e12 ? genAt : genAt * 1000) : Date.parse(genAt);
+      if (t > 0) {
+        this.blurLatency = Math.max(1, Date.now() - t);
+        this._lastBlurMsg = Date.now();
+      }
+    }
+
+    switch (eventType) {
+      case 'swap': {
+        const trade = parseBlurSwapEvent(msg);
+        if (trade) {
+          this._emit('trade', trade);
+          if (trade.isWhale) {
+            this.whaleTradeHistory.unshift(trade);
+            if (this.whaleTradeHistory.length > 50) this.whaleTradeHistory.pop();
+            this._emit('whale', trade);
+          }
+        }
+        break;
+      }
+
+      case 'surge':
+      case 'radar': {
+        const alert = parseSurgeEvent(msg, eventType);
+        if (alert) {
+          const list = eventType === 'surge' ? this.surgeAlerts : this.radarAlerts;
+          list.unshift(alert);
+          if (list.length > 30) list.pop();
+          this._emit(eventType, alert);
+          this._emit('surge-radar', alert); // unified event
+        }
+        break;
+      }
+
+      case 'graduation': {
+        const grad = parseGraduationEvent(msg);
+        if (grad) {
+          this.graduations.unshift(grad);
+          if (this.graduations.length > 30) this.graduations.pop();
+          this._emit('graduation', grad);
+        }
+        break;
+      }
+
+      case 'trending': {
+        const trades = parseTrendingData(msg);
+        trades.forEach(trade => {
+          this._emit('trade', trade);
+          if (trade.isWhale) {
+            this.whaleTradeHistory.unshift(trade);
+            if (this.whaleTradeHistory.length > 50) this.whaleTradeHistory.pop();
+            this._emit('whale', trade);
+          }
+        });
+        break;
+      }
+
+      case 'token_create': {
+        // Treat new token launches like a graduation starting
+        const grad = parseGraduationEvent(msg);
+        if (grad) {
+          grad.type = 'launch';
+          grad.progress = 0;
+          this.graduations.unshift(grad);
+          if (this.graduations.length > 30) this.graduations.pop();
+          this._emit('graduation', grad);
+        }
+        break;
+      }
+
+      default: {
+        // Unknown event type — try parsing as swap anyway
+        const trade = parseBlurSwapEvent(msg);
+        if (trade && trade.token !== 'UNKNOWN') {
+          this._emit('trade', trade);
+        }
+        break;
+      }
+    }
+  }
+
+  /**
    * Connect via Server-Sent Events (SSE) server proxy
    */
   _connectSseStream() {
@@ -497,26 +782,27 @@ export class SolamiBlur {
             if (msg.status === 'connected') return;
             if (msg.error) return;
 
-            // Process single or array event
-            const processTrade = (evt) => {
-              if (!evt || typeof evt !== 'object') return;
-              const trade = parseBlurSwapEvent(evt);
-              if (trade) {
-                this._emit('trade', trade);
-                if (trade.isWhale) {
-                  this.whaleTradeHistory.unshift(trade);
-                  if (this.whaleTradeHistory.length > 50) this.whaleTradeHistory.pop();
-                  this._emit('whale', trade);
+            // Route through unified processor
+            if (Array.isArray(msg)) {
+              msg.forEach(evt => this._processBlurMessage(evt));
+            } else if (msg.data && typeof msg.data === 'object') {
+              if (Array.isArray(msg.data)) {
+                // Could be a trending/snapshot with data array, or array of events
+                // Check if the parent has a type (trending wrapper)
+                const parentType = getBlurEventType(msg);
+                if (parentType === 'trending') {
+                  this._processBlurMessage(msg);
+                } else {
+                  msg.data.forEach(evt => this._processBlurMessage(evt));
                 }
+              } else {
+                this._processBlurMessage(msg.data);
               }
-            };
-
-            if (Array.isArray(msg)) msg.forEach(processTrade);
-            else if (msg.data) {
-              if (Array.isArray(msg.data)) msg.data.forEach(processTrade);
-              else processTrade(msg.data);
-            } else if (msg.events && Array.isArray(msg.events)) msg.events.forEach(processTrade);
-            else processTrade(msg);
+            } else if (msg.events && Array.isArray(msg.events)) {
+              msg.events.forEach(evt => this._processBlurMessage(evt));
+            } else {
+              this._processBlurMessage(msg);
+            }
           } catch (e) {
             /* ignore parse errors */
           }
@@ -559,14 +845,14 @@ export class SolamiBlur {
           this.reconnectAttempts = 0;
           this._emit('status', { connected: true, live: true });
 
-          // Send subscription filter to receive swap events
+          // Subscribe to ALL event types
           this.ws.send(JSON.stringify({
             filter: {
-              types: ['swap'],
-              min_volume_usd: 1.0,
+              types: ['swap', 'surge', 'radar', 'graduation', 'token_create', 'liquidity'],
+              min_volume_usd: 0.5,
             }
           }));
-          console.log('[SolFlow] Sent swap subscription filter');
+          console.log('[SolFlow] Sent full subscription filter (swap+surge+radar+graduation+token_create)');
 
           resolve();
         };
@@ -575,60 +861,40 @@ export class SolamiBlur {
           try {
             const msg = JSON.parse(event.data);
 
-            // Log first few messages for debugging
-            if (!this._msgCount) this._msgCount = 0;
-            this._msgCount++;
-            if (this._msgCount <= 3) {
-              console.log(`[Blur] Message #${this._msgCount}:`, JSON.stringify(msg).slice(0, 400));
-            }
-
-            // Helper to process a single trade event
-            const processTrade = (evt) => {
-              if (!evt || typeof evt !== 'object') return;
-              const trade = parseBlurSwapEvent(evt);
-              if (trade) {
-                this._emit('trade', trade);
-                if (trade.isWhale) {
-                  this.whaleTradeHistory.unshift(trade);
-                  if (this.whaleTradeHistory.length > 50) this.whaleTradeHistory.pop();
-                  this._emit('whale', trade);
-                }
-              }
-            };
-
             // Handle all possible message formats
-
-            // Array of events
             if (Array.isArray(msg)) {
-              msg.forEach(evt => processTrade(evt));
+              msg.forEach(evt => this._processBlurMessage(evt));
               return;
             }
 
             // Nested data field (array or object)
             if (msg.data && typeof msg.data === 'object') {
-              if (Array.isArray(msg.data)) {
-                msg.data.forEach(evt => processTrade(evt));
+              const parentType = getBlurEventType(msg);
+              if (parentType === 'trending') {
+                this._processBlurMessage(msg);
+              } else if (Array.isArray(msg.data)) {
+                msg.data.forEach(evt => this._processBlurMessage(evt));
               } else {
-                processTrade(msg.data);
+                this._processBlurMessage(msg.data);
               }
               return;
             }
 
             // Events wrapper
             if (msg.events && Array.isArray(msg.events)) {
-              msg.events.forEach(evt => processTrade(evt));
+              msg.events.forEach(evt => this._processBlurMessage(evt));
               return;
             }
 
             // Trades wrapper
             if (msg.trades && Array.isArray(msg.trades)) {
-              msg.trades.forEach(evt => processTrade(evt));
+              msg.trades.forEach(evt => this._processBlurMessage(evt));
               return;
             }
 
-            // Direct event object — try parsing it
+            // Direct event object
             if (typeof msg === 'object' && msg !== null) {
-              processTrade(msg);
+              this._processBlurMessage(msg);
             }
 
           } catch (e) {
@@ -711,6 +977,7 @@ export class SolamiBlur {
   getLeaderboard() {
     return Array.from(tokenState.values())
       .sort((a, b) => b.volume24h - a.volume24h)
+      .slice(0, 20)
       .map((t, i) => ({
         rank: i + 1,
         symbol: t.symbol,
@@ -741,6 +1008,22 @@ export class SolamiBlur {
     return [...this.whaleTradeHistory];
   }
 
+  getSurgeAlerts() {
+    return [...this.surgeAlerts, ...this.radarAlerts]
+      .sort((a, b) => b.timestamp - a.timestamp)
+      .slice(0, 20);
+  }
+
+  getGraduations() {
+    return [...this.graduations].slice(0, 20);
+  }
+
+  getBlurLatency() {
+    // If no message received in 10s, consider it stale
+    if (Date.now() - this._lastBlurMsg > 10000) return null;
+    return this.blurLatency;
+  }
+
   getMetrics() {
     const tokens = Array.from(tokenState.values());
     const totalVolume = tokens.reduce((sum, t) => sum + t.volume24h, 0);
@@ -748,7 +1031,7 @@ export class SolamiBlur {
     const avgBuyPressure = tokens.reduce((sum, t) => sum + t.buyPressure, 0) / tokens.length;
     const uniqueWallets = Math.floor(totalTrades * 0.35 + Math.random() * 1000);
     const activePools = Math.floor(tokens.length * 2.5 + Math.random() * 5);
-    const newLaunches = Math.floor(Math.random() * 2 + 18);
+    const newLaunches = this.graduations.filter(g => g.type === 'launch').length || Math.floor(Math.random() * 2 + 18);
 
     const current = {
       totalVolume24h: totalVolume,
