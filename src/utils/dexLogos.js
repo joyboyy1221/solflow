@@ -19,8 +19,8 @@ function svgToDataUri(svg) {
 // Original source URLs
 const RAW_LOGOS = {
   'Jupiter': 'https://static.jup.ag/jup/icon.png',
-  'Raydium': 'https://img.raydium.io/icon/4k3Dyjzvzp8eMZWUXbBCjEvwSkkk59S5iCNLY3QrkX6R/logo.png',
-  'Orca': 'https://arweave.net/SIwmEVqRUCGOVPyRp6W01yErbO0iDfmJIEotzX-dTUQ',
+  'Raydium': 'https://raw.githubusercontent.com/raydium-io/media-assets/master/logo.svg',
+  'Orca': 'https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/orcaEKTdK7LKz57vaAYr9QeNsVEPfiu6QeMU1kektZE/logo.png',
   'Meteora': 'https://app.meteora.ag/icons/logo.svg',
   'Pump.fun': 'https://pump.fun/icon.png',
   'Phoenix': null,   // CDN dead — using embedded SVG
