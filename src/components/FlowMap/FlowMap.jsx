@@ -1,7 +1,7 @@
 import { useEffect, useRef, useCallback, useState } from 'react';
 import { DEX_COLORS } from '../../utils/constants.js';
 import { formatUsd, formatNumber } from '../../utils/formatters.js';
-import { DEX_LOGOS, DEX_LOGO_FALLBACKS } from '../../utils/dexLogos.js';
+import { preloadDexLogosAsync } from '../../utils/dexLogos.js';
 
 /* ── Flow Map Node / Particle definitions ── */
 
@@ -87,26 +87,13 @@ export default function FlowMap({ trades, dexFlows }) {
   const [hoveredNode, setHoveredNode] = useState(null);
   const [tooltip, setTooltip] = useState(null);
 
-  // Preload DEX logo images with fallback
+  // Preload DEX logo images (async blob-based to bypass CORS)
   useEffect(() => {
-    Object.entries(DEX_LOGOS).forEach(([name, url]) => {
-      const img = new Image();
-      img.crossOrigin = 'anonymous';
-      img.onload = () => {
+    preloadDexLogosAsync().then(loaded => {
+      loaded.forEach((img, name) => {
         dexImagesRef.current.set(name, img);
-      };
-      img.onerror = () => {
-        // Try inline SVG fallback
-        const fallbackUrl = DEX_LOGO_FALLBACKS[name];
-        if (fallbackUrl) {
-          const fallbackImg = new Image();
-          fallbackImg.onload = () => {
-            dexImagesRef.current.set(name, fallbackImg);
-          };
-          fallbackImg.src = fallbackUrl;
-        }
-      };
-      img.src = url;
+      });
+      console.log(`[FlowMap] Loaded ${loaded.size}/7 DEX logos`);
     });
   }, []);
 
