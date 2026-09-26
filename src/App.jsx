@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { getSolamiRPC, getSolamiMirage, getSolamiBlur } from './services/solami.js';
 import { METRICS_REFRESH_MS, TABS } from './utils/constants.js';
 
@@ -12,6 +12,36 @@ import LatencyPanel from './components/LatencyPanel/LatencyPanel.jsx';
 import DexDonut from './components/DexDonut/DexDonut.jsx';
 import TokenDrillDown from './components/DrillDown/TokenDrillDown.jsx';
 import ShareCard from './components/ShareCard/ShareCard.jsx';
+import HowItWorks from './components/HowItWorks/HowItWorks.jsx';
+
+/* ── Simple sound effect generator (Web Audio API) ── */
+const AudioCtx = window.AudioContext || window.webkitAudioContext;
+let audioCtx = null;
+
+function playSound(type) {
+  try {
+    if (!audioCtx) audioCtx = new AudioCtx();
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+
+    if (type === 'whale') {
+      osc.frequency.setValueAtTime(880, audioCtx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(440, audioCtx.currentTime + 0.15);
+      gain.gain.setValueAtTime(0.08, audioCtx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.3);
+      osc.start(audioCtx.currentTime);
+      osc.stop(audioCtx.currentTime + 0.3);
+    } else if (type === 'trade') {
+      osc.frequency.setValueAtTime(1200, audioCtx.currentTime);
+      gain.gain.setValueAtTime(0.03, audioCtx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.08);
+      osc.start(audioCtx.currentTime);
+      osc.stop(audioCtx.currentTime + 0.08);
+    }
+  } catch { /* ignore audio errors */ }
+}
 
 export default function App() {
   // State
@@ -31,6 +61,15 @@ export default function App() {
   // Modal state
   const [drillDownToken, setDrillDownToken] = useState(null);
   const [shareToken, setShareToken] = useState(null);
+  const [showHowItWorks, setShowHowItWorks] = useState(false);
+
+  // Search state
+  const [searchQuery, setSearchQuery] = useState('');
+
+  // Sound toggle
+  const [soundEnabled, setSoundEnabled] = useState(false);
+  const soundEnabledRef = useRef(false);
+  useEffect(() => { soundEnabledRef.current = soundEnabled; }, [soundEnabled]);
 
   const blurRef = useRef(null);
   const mirageRef = useRef(null);
@@ -43,6 +82,35 @@ export default function App() {
       setUptime(Math.floor((Date.now() - startTimeRef.current) / 1000));
     }, 1000);
     return () => clearInterval(interval);
+  }, []);
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handler = (e) => {
+      // Don't trigger if typing in an input
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+
+      switch (e.key) {
+        case '1': setActiveTab(TABS.LEADERBOARD); break;
+        case '2': setActiveTab(TABS.TRADES); break;
+        case '3': setActiveTab(TABS.WHALES); break;
+        case 'Escape':
+          setDrillDownToken(null);
+          setShareToken(null);
+          setShowHowItWorks(false);
+          break;
+        case '?':
+          setShowHowItWorks(prev => !prev);
+          break;
+        case 's':
+        case 'S':
+          if (!e.ctrlKey && !e.metaKey) setSoundEnabled(prev => !prev);
+          break;
+        default: break;
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
   }, []);
 
   // Initialize services
@@ -58,6 +126,7 @@ export default function App() {
     // Blur trade stream
     const offTrade = blur.on('trade', (trade) => {
       setTrades(prev => [trade, ...prev].slice(0, 200));
+      if (soundEnabledRef.current) playSound('trade');
     });
 
     const offBlurStatus = blur.on('status', (status) => {
@@ -67,6 +136,7 @@ export default function App() {
     // Whale events
     const offWhale = blur.on('whale', (trade) => {
       setWhales(prev => [trade, ...prev].slice(0, 50));
+      if (soundEnabledRef.current) playSound('whale');
     });
 
     // Start Blur stream
@@ -153,6 +223,15 @@ export default function App() {
     ? dexFlows.reduce((acc, d) => { acc[d.name] = d; return acc; }, {})
     : dexFlows;
 
+  // Filtered leaderboard
+  const filteredLeaderboard = useMemo(() => {
+    if (!searchQuery.trim()) return leaderboard;
+    const q = searchQuery.toLowerCase();
+    return leaderboard.filter(t =>
+      t.symbol?.toLowerCase().includes(q) || t.name?.toLowerCase().includes(q)
+    );
+  }, [leaderboard, searchQuery]);
+
   const whaleCount = whales.length;
 
   return (
@@ -186,11 +265,34 @@ export default function App() {
           </div>
         </div>
 
-        <ConnectionStatus
-          mirageStatus={mirageStatus}
-          blurStatus={blurStatus}
-          rpcLatency={rpcLatency}
-        />
+        <div className="header-right-group">
+          {/* Sound toggle */}
+          <button
+            className={`header-btn sound-toggle ${soundEnabled ? 'active' : ''}`}
+            onClick={() => setSoundEnabled(!soundEnabled)}
+            title={soundEnabled ? 'Sound ON (S)' : 'Sound OFF (S)'}
+          >
+            {soundEnabled ? '🔊' : '🔇'}
+          </button>
+
+          {/* How It Works */}
+          <button
+            className="header-btn how-btn"
+            onClick={() => setShowHowItWorks(true)}
+            title="How It Works (?)"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <circle cx="12" cy="12" r="10"/>
+              <path d="M12 16v-4M12 8h.01"/>
+            </svg>
+          </button>
+
+          <ConnectionStatus
+            mirageStatus={mirageStatus}
+            blurStatus={blurStatus}
+            rpcLatency={rpcLatency}
+          />
+        </div>
       </header>
 
       {/* ── Main Content ── */}
@@ -246,8 +348,28 @@ export default function App() {
           </button>
         </div>
 
+        {/* Token Search (leaderboard tab only) */}
         {activeTab === TABS.LEADERBOARD && (
-          <TokenLeaderboard leaderboard={leaderboard} onTokenClick={handleTokenClick} />
+          <div className="token-search-wrap">
+            <svg className="token-search-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <circle cx="11" cy="11" r="8"/>
+              <path d="m21 21-4.35-4.35"/>
+            </svg>
+            <input
+              className="token-search-input"
+              type="text"
+              placeholder="Search tokens..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+            {searchQuery && (
+              <button className="token-search-clear" onClick={() => setSearchQuery('')}>✕</button>
+            )}
+          </div>
+        )}
+
+        {activeTab === TABS.LEADERBOARD && (
+          <TokenLeaderboard leaderboard={filteredLeaderboard} onTokenClick={handleTokenClick} />
         )}
         {activeTab === TABS.TRADES && (
           <TradeFeed trades={trades} />
@@ -282,6 +404,9 @@ export default function App() {
           token={shareToken}
           onClose={() => setShareToken(null)}
         />
+      )}
+      {showHowItWorks && (
+        <HowItWorks onClose={() => setShowHowItWorks(false)} />
       )}
     </div>
   );
