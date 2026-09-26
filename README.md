@@ -2,28 +2,89 @@
 
 ![SolFlow](https://img.shields.io/badge/Solana-Live-00FFA3?style=for-the-badge&logo=solana) ![Solami](https://img.shields.io/badge/Powered%20by-Solami-22d3ee?style=for-the-badge) ![License](https://img.shields.io/badge/License-MIT-a78bfa?style=for-the-badge)
 
-**SolFlow** is a stunning, real-time web dashboard that visualizes capital flowing through Solana DEXes. Watch live trades, track token volume leaderboards, monitor whale activity, and see animated money flow between Jupiter, Raydium, Orca, Meteora, Pump.fun and more — all powered by [Solami](https://solami.dev) infrastructure.
+**SolFlow** is a real-time Solana DEX analytics dashboard that visualizes capital flowing across the entire Solana DeFi ecosystem. Watch live trades, track whale activity, compare multi-path latencies, and explore token drill-downs — all powered by **three** [Solami](https://solami.dev) products working together.
 
 🔗 **Live Demo**: [https://solflow-gamma.vercel.app/](https://solflow-gamma.vercel.app/)
 
+---
+
+## 🏆 Why SolFlow Wins
+
+SolFlow is the **only** dashboard that uses **all three Solami products** simultaneously:
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    SolFlow Dashboard                        │
+│                                                             │
+│  ┌─────────────┐  ┌──────────────┐  ┌───────────────────┐  │
+│  │  Flow Map   │  │  Latency     │  │  Token Leaderboard│  │
+│  │  (Canvas)   │  │  Comparison  │  │  + Drill-Down     │  │
+│  └──────┬──────┘  └──────┬───────┘  └────────┬──────────┘  │
+│         │                │                    │             │
+│         └────────────────┼────────────────────┘             │
+│                          │                                  │
+│              ┌───────────┴───────────┐                      │
+│              │   Solami Data Layer   │                      │
+│              └───────────┬───────────┘                      │
+└──────────────────────────┼──────────────────────────────────┘
+                           │
+          ┌────────────────┼────────────────┐
+     ┌────┴─────┐    ┌────┴─────┐    ┌─────┴─────┐
+     │  Solami  │    │  Solami  │    │  Solami   │
+     │   RPC    │    │  Mirage  │    │   Blur    │
+     │          │    │          │    │           │
+     │ Slot #   │    │ gRPC→WS  │    │ DEX Trades│
+     │ Balance  │    │ Real-time│    │ Whales    │
+     │ Latency  │    │ Stream   │    │ Volume    │
+     └──────────┘    └──────────┘    └───────────┘
+```
+
+**One API key → Three data paths → Complete Solana visibility**
+
+---
+
 ## ✨ Features
 
-- 🌊 **Live Flow Visualization** — Animated canvas showing capital moving between DEX protocols in real-time with hover tooltips, volume-proportional nodes, and curved gradient connections
-- 📊 **Real-Time Metrics** — 6 live metric cards: 24h volume, trade counts, active pools, new launches, unique wallets, and buy/sell pressure — all with sparklines and animated delta percentages
-- 🏆 **Token Leaderboard** — Top 20 tokens ranked by volume with inline sparkline charts, volume bars, price changes, and hot badges for volatile tokens
-- ⚡ **Trade Feed** — Scrolling feed of every trade with visual hierarchy: whale banners (🐋 $10K+), large trade highlights, token avatars, and side indicators
-- 🐋 **Whale Alerts** — Dedicated whale trade panel with dramatic cards showing token, size, DEX, and time for $10K+ trades
-- 🔗 **Connection Health** — Live status pills for all Solami service connections (Blur, Mirage, RPC) with latency display
-- 🎨 **Premium Dark UI** — Glassmorphism, neon glows, smooth animations, responsive layout for desktop/tablet/mobile
-- ⏱️ **Uptime Counter** — Live session timer and Solana slot number tracking
+### Core Dashboard
+- 🌐 **Live Capital Flow Map** — Animated canvas showing real-time capital flowing between 7 DEXes (Jupiter, Raydium, Orca, Meteora, Pump.fun, Phoenix, Lifinity) with branded logos, hover tooltips, particle trails, and volume-proportional nodes
+- 📊 **Real-Time Metrics Bar** — 6 live metric cards: 24h volume, trade count, active pools, new launches, unique wallets, buy/sell ratio — all with sparklines and animated deltas
+- 🏆 **Token Leaderboard** — Top 20 tokens ranked by volume with inline sparkline charts, price changes, and hot badges
+
+### Advanced Analytics
+- 🏎️ **Multi-Path Latency Comparison** — Live panel showing RPC vs Mirage vs Blur latency with sparkline history. Highlights fastest path with 👑. Proves Solami's multi-path value.
+- 🍩 **DEX Volume Donut Chart** — Animated SVG donut showing volume distribution across all 7 DEXes with legend and buy/sell pressure bars
+- 🐋 **Whale Alerts** — Real-time detection of $10K+ trades with dramatic card UI
+
+### Interactive Features
+- 🔍 **Token Drill-Down** — Click any token → modal with price chart, stats grid, buy/sell pressure bar, recent trades list, whale activity tab
+- 📤 **Share Card** — Generate screenshot-ready token cards with stats + SolFlow branding, share to Twitter with one click
+- 🔌 **Connection Health** — Live status for all 3 Solami services with latency display
+
+### Design
+- 🎨 **Premium Dark UI** — Glassmorphism, neon glows, smooth micro-animations
+- 📱 **Responsive** — Full dashboard on desktop, optimized for tablet/mobile
+
+---
 
 ## 🔧 Solami Products Used
 
-| Product | Usage |
-|---------|-------|
-| **Mirage** (WebSocket) | Real-time transaction & slot streaming in the browser — no gRPC toolchain required |
-| **Blur** (REST + WebSocket) | Decoded DEX trades, token launches, liquidity events, candles — no instruction parsing |
-| **RPC** | Account balance lookups, slot queries, transaction details, network health pings |
+| Product | What It Does | How SolFlow Uses It |
+|---------|-------------|-------------------|
+| **RPC** | JSON-RPC 2.0 endpoint | Slot queries, balance lookups, network health pings, latency benchmarking |
+| **Mirage** | gRPC → WebSocket bridge | Real-time transaction streaming without gRPC toolchain, slot subscriptions |
+| **Blur** | Decoded DEX data stream | Live trade feed, token volumes, whale detection, DEX flow tracking, token metadata |
+
+### Multi-Path Architecture
+
+SolFlow doesn't just use one API — it uses **all three simultaneously** and lets you **compare their performance in real-time**:
+
+```
+RPC:    ████████████████████████████░░░  ~400ms (JSON-RPC polling)
+Mirage: ██████████░░░░░░░░░░░░░░░░░░░░  ~100ms (gRPC WebSocket)
+Blur:   ████████░░░░░░░░░░░░░░░░░░░░░░   ~80ms (Real-time stream)
+```
+
+---
 
 ## 🚀 Getting Started
 
@@ -31,8 +92,6 @@
 
 Sign up for **free Pro access** (7 days):
 👉 [https://solami.dev/signup?ref=st-earn-sep-26](https://solami.dev/signup?ref=st-earn-sep-26)
-
-Pro includes: 2 unmetered gRPC streams, 1 TB Blur data, 200 RPS on RPC.
 
 ### 2. Clone & Install
 
@@ -42,15 +101,11 @@ cd solflow
 npm install
 ```
 
-### 3. Configure Environment
+### 3. Configure
 
 ```bash
 cp .env.example .env
-```
-
-Edit `.env` and add your Solami API key:
-```
-VITE_SOLAMI_API_KEY=your_api_key_here
+# Edit .env and add: SOLAMI_API_KEY=your_key_here
 ```
 
 ### 4. Run
@@ -59,64 +114,57 @@ VITE_SOLAMI_API_KEY=your_api_key_here
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) — you'll see live Solana data streaming in immediately.
+Open [http://localhost:3000](http://localhost:3000)
+
+---
 
 ## 📁 Project Structure
 
 ```
 solflow/
+├── api/                              # Vercel Serverless Functions
+│   ├── rpc.js                        # RPC proxy (hides API key)
+│   ├── stream.js                     # SSE Blur stream proxy
+│   └── logo.js                       # Image proxy for DEX logos (CORS bypass)
 ├── src/
-│   ├── App.jsx                        # Main dashboard layout (3-tab sidebar)
-│   ├── index.css                      # Design system v3.0 (dark theme, glassmorphism, responsive)
+│   ├── App.jsx                       # Main layout + state management
+│   ├── index.css                     # Design system (2800+ lines)
 │   ├── services/
-│   │   └── solami.js                  # Solami API client (RPC, Mirage, Blur + DEX tracking)
+│   │   └── solami.js                 # Unified API client (RPC + Mirage + Blur)
 │   ├── components/
-│   │   ├── FlowMap/FlowMap.jsx        # Interactive Canvas flow visualization with tooltips
-│   │   ├── Metrics/MetricsBar.jsx     # Animated real-time metrics cards with sparklines
-│   │   ├── Leaderboard/              # Token ranking with volume bars & sparklines
-│   │   ├── TradeFeed/                # Live trade stream with whale detection
-│   │   ├── WhaleAlerts/              # Dedicated whale trade alert panel
-│   │   └── Status/                   # Connection health indicators with Solami branding
+│   │   ├── FlowMap/                  # Interactive canvas flow visualization
+│   │   ├── Metrics/MetricsBar.jsx    # Animated real-time metric cards
+│   │   ├── Leaderboard/             # Token ranking + click-to-drill-down
+│   │   ├── TradeFeed/               # Live trade stream with whale detection
+│   │   ├── WhaleAlerts/             # $10K+ whale trade alert panel
+│   │   ├── LatencyPanel/            # Multi-path latency comparison
+│   │   ├── DexDonut/                # DEX volume donut chart
+│   │   ├── DrillDown/               # Token detail modal
+│   │   ├── ShareCard/               # Shareable token stats card
+│   │   ├── TokenIcon/               # Dynamic token logo fetcher
+│   │   └── Status/                  # Connection health indicators
 │   └── utils/
-│       ├── formatters.js              # Number/currency/time/relative formatting
-│       └── constants.js               # Colors, thresholds, tabs, config
+│       ├── formatters.js             # Number/currency/time formatting
+│       ├── constants.js              # Colors, thresholds, config
+│       ├── dexLogos.js               # DEX logo loader with proxy
+│       └── tokenLogos.js             # Token logo resolver
 ├── .env.example
+├── vercel.json
 ├── package.json
 └── vite.config.js
 ```
 
-## 🏗️ Architecture
+---
 
-```
-┌──────────────────────────────────────────────────┐
-│             Frontend (Vite + React)              │
-│                                                  │
-│  FlowMap ← Interactive Canvas with hover tooltips│
-│  MetricsBar ← 6 animated cards with sparklines  │
-│  Leaderboard ← Volume bars + inline charts      │
-│  TradeFeed ← Visual hierarchy + whale banners    │
-│  WhaleAlerts ← Dramatic $10K+ trade cards        │
-│                                                  │
-│              ┌─────────────┐                     │
-│              │  Data Layer  │                     │
-│              └──────┬──────┘                     │
-└─────────────────────┼────────────────────────────┘
-                      │
-         ┌────────────┼──────────────┐
-    ┌────┴─────┐ ┌────┴─────┐ ┌─────┴─────┐
-    │  Mirage  │ │   Blur   │ │   RPC     │
-    │  (WS)   │ │ (REST+WS)│ │ (JSON-RPC)│
-    └──────────┘ └──────────┘ └───────────┘
-           Solami Infrastructure
-```
+## 🎨 Design System
 
-## 🎨 Design
+- **Background**: Deep navy (#060a13) with animated gradient mesh + noise texture
+- **Cards**: Glassmorphism with blur(20px), subtle borders, glow on hover
+- **Palette**: Cyan (#22d3ee), Purple (#a78bfa), Green (#4ade80), Gold (#fbbf24), Red (#f87171)
+- **Typography**: Inter (UI), JetBrains Mono (data), responsive sizing
+- **Animations**: Particle trails, flash on new data, sparkline transitions, pulse effects
 
-- **Color Palette**: Deep navy background (#060a13), cyan/purple gradients, green/red for buy/sell
-- **Typography**: Inter for UI, JetBrains Mono for data values
-- **Effects**: Glassmorphism cards, neon glow animations, particle trails, hover tooltips
-- **Responsive**: Full dashboard on desktop, stacked layout on tablet, optimized for mobile
-- **Components**: 6 metric cards, interactive flow map, 3-tab sidebar (Leaderboard/Trades/Whales)
+---
 
 ## 📜 License
 
@@ -124,4 +172,4 @@ MIT — free to use, modify, and distribute.
 
 ## 🙏 Credits
 
-Built with [Solami](https://solami.dev) — high-performance Solana infrastructure for builders and traders.
+Built with ❤️ using [Solami](https://solami.dev) — high-performance Solana infrastructure for builders and traders.

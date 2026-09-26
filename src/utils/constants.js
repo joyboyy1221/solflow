@@ -54,6 +54,4 @@ export const TABS = {
   LEADERBOARD: 'leaderboard',
   TRADES: 'trades',
   WHALES: 'whales',
-  SURGE: 'surge',
-  GRADS: 'grads',
 };
