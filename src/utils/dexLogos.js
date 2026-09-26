@@ -1,79 +1,72 @@
 /* ── DEX Logo URLs ── */
-/* Using multiple fallback sources for reliability */
+/* All logos go through /api/logo proxy to bypass CORS completely */
 
-export const DEX_LOGOS = {
+// Original source URLs for each DEX
+const RAW_LOGOS = {
   'Jupiter': 'https://static.jup.ag/jup/icon.png',
   'Raydium': 'https://img.raydium.io/icon/4k3Dyjzvzp8eMZWUXbBCjEvwSkkk59S5iCNLY3QrkX6R/logo.png',
   'Orca': 'https://arweave.net/SIwmEVqRUCGOVPyRp6W01yErbO0iDfmJIEotzX-dTUQ',
   'Meteora': 'https://app.meteora.ag/icons/logo.svg',
   'Pump.fun': 'https://pump.fun/icon.png',
   'Phoenix': 'https://shdw-drive.genesysgo.net/5ECTMZ9xTxgLB6MXZyBLYwcnL4sN2JMdquNtBJnKxEv/PhoenixLogo.png',
-  'Lifinity': 'https://raw.githubusercontent.com/nicechute/lifinity-lfy/main/logo.png',
+  'Lifinity': 'https://lifinity.io/logo-filled.svg',
 };
 
-// Backup URLs if primary ones fail
-export const DEX_LOGOS_BACKUP = {
+// Backup URLs
+const BACKUP_LOGOS = {
   'Jupiter': 'https://assets.coingecko.com/coins/images/33835/small/jup.png',
   'Raydium': 'https://assets.coingecko.com/coins/images/13928/small/PSigc4ie_400x400.jpg',
   'Orca': 'https://assets.coingecko.com/coins/images/17547/small/Orca_Logo.png',
   'Meteora': 'https://assets.coingecko.com/coins/images/30344/small/logo_%281%29.png',
-  'Pump.fun': null,
-  'Phoenix': null,
+  'Pump.fun': 'https://dd.dexscreener.com/ds-data/dexes/pumpfun.png',
+  'Phoenix': 'https://assets.coingecko.com/markets/images/1210/small/phoenix.png',
   'Lifinity': 'https://assets.coingecko.com/coins/images/25670/small/lfnty.png',
 };
 
+// Build proxied URL through our /api/logo endpoint
+function proxyUrl(url) {
+  return `/api/logo?url=${encodeURIComponent(url)}`;
+}
+
+// Exported logo URLs (all go through proxy)
+export const DEX_LOGOS = Object.fromEntries(
+  Object.entries(RAW_LOGOS).map(([name, url]) => [name, proxyUrl(url)])
+);
+
+export const DEX_LOGOS_BACKUP = Object.fromEntries(
+  Object.entries(BACKUP_LOGOS).map(([name, url]) => [name, url ? proxyUrl(url) : null])
+);
+
 /**
- * Preload DEX logos by fetching as blobs — this bypasses CORS for canvas!
- * Regular Image.crossOrigin='anonymous' fails if server doesn't send CORS headers.
- * But fetch → blob → objectURL always works for canvas.
+ * Preload DEX logos — since they go through our own proxy,
+ * there are zero CORS issues. Standard Image loading works.
  */
 export async function preloadDexLogosAsync() {
   const loaded = new Map();
 
-  const loadOne = async (name, urls) => {
-    for (const url of urls) {
-      if (!url) continue;
+  const loadImage = (url) => new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = reject;
+    img.src = url;
+  });
+
+  await Promise.allSettled(
+    Object.entries(DEX_LOGOS).map(async ([name, url]) => {
       try {
-        const res = await fetch(url, { mode: 'cors' });
-        if (!res.ok) continue;
-        const blob = await res.blob();
-        const objectUrl = URL.createObjectURL(blob);
-        const img = new Image();
-        await new Promise((resolve, reject) => {
-          img.onload = resolve;
-          img.onerror = reject;
-          img.src = objectUrl;
-        });
-        loaded.set(name, img);
-        return; // success
-      } catch {
-        continue; // try next URL
-      }
-    }
-    // All URLs failed — try direct Image load (some work without fetch CORS)
-    for (const url of urls) {
-      if (!url) continue;
-      try {
-        const img = new Image();
-        img.crossOrigin = 'anonymous';
-        await new Promise((resolve, reject) => {
-          img.onload = resolve;
-          img.onerror = reject;
-          img.src = url;
-        });
+        const img = await loadImage(url);
         loaded.set(name, img);
         return;
-      } catch {
-        continue;
-      }
-    }
-  };
+      } catch { /* primary failed */ }
 
-  // Load all in parallel
-  await Promise.allSettled(
-    Object.entries(DEX_LOGOS).map(([name, url]) => {
-      const backupUrl = DEX_LOGOS_BACKUP[name];
-      return loadOne(name, [url, backupUrl].filter(Boolean));
+      // Try backup
+      const backup = DEX_LOGOS_BACKUP[name];
+      if (backup) {
+        try {
+          const img = await loadImage(backup);
+          loaded.set(name, img);
+        } catch { /* backup also failed */ }
+      }
     })
   );
 
@@ -87,36 +80,18 @@ export function preloadDexLogos() {
   const loaded = new Map();
 
   Object.entries(DEX_LOGOS).forEach(([name, url]) => {
-    const backupUrl = DEX_LOGOS_BACKUP[name];
-    const urls = [url, backupUrl].filter(Boolean);
-
-    const tryLoad = (idx) => {
-      if (idx >= urls.length) return;
-      
-      // Try fetch → blob → objectURL first
-      fetch(urls[idx], { mode: 'cors' })
-        .then(res => {
-          if (!res.ok) throw new Error('not ok');
-          return res.blob();
-        })
-        .then(blob => {
-          const objectUrl = URL.createObjectURL(blob);
-          const img = new Image();
-          img.onload = () => loaded.set(name, img);
-          img.onerror = () => tryLoad(idx + 1);
-          img.src = objectUrl;
-        })
-        .catch(() => {
-          // Fallback: try direct load
-          const img = new Image();
-          img.crossOrigin = 'anonymous';
-          img.onload = () => loaded.set(name, img);
-          img.onerror = () => tryLoad(idx + 1);
-          img.src = urls[idx];
-        });
+    const img = new Image();
+    img.onload = () => { loaded.set(name, img); };
+    img.onerror = () => {
+      // Try backup
+      const backup = DEX_LOGOS_BACKUP[name];
+      if (backup) {
+        const img2 = new Image();
+        img2.onload = () => { loaded.set(name, img2); };
+        img2.src = backup;
+      }
     };
-
-    tryLoad(0);
+    img.src = url;
   });
 
   return loaded;
