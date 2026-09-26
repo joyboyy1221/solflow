@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { getSolamiRPC, getSolamiMirage, getSolamiBlur } from './services/solami.js';
 import { METRICS_REFRESH_MS, TABS } from './utils/constants.js';
 
@@ -14,34 +14,7 @@ import TokenDrillDown from './components/DrillDown/TokenDrillDown.jsx';
 import ShareCard from './components/ShareCard/ShareCard.jsx';
 import HowItWorks from './components/HowItWorks/HowItWorks.jsx';
 
-/* ── Simple sound effect generator (Web Audio API) ── */
-const AudioCtx = window.AudioContext || window.webkitAudioContext;
-let audioCtx = null;
 
-function playSound(type) {
-  try {
-    if (!audioCtx) audioCtx = new AudioCtx();
-    const osc = audioCtx.createOscillator();
-    const gain = audioCtx.createGain();
-    osc.connect(gain);
-    gain.connect(audioCtx.destination);
-
-    if (type === 'whale') {
-      osc.frequency.setValueAtTime(880, audioCtx.currentTime);
-      osc.frequency.exponentialRampToValueAtTime(440, audioCtx.currentTime + 0.15);
-      gain.gain.setValueAtTime(0.08, audioCtx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.3);
-      osc.start(audioCtx.currentTime);
-      osc.stop(audioCtx.currentTime + 0.3);
-    } else if (type === 'trade') {
-      osc.frequency.setValueAtTime(1200, audioCtx.currentTime);
-      gain.gain.setValueAtTime(0.03, audioCtx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.08);
-      osc.start(audioCtx.currentTime);
-      osc.stop(audioCtx.currentTime + 0.08);
-    }
-  } catch { /* ignore audio errors */ }
-}
 
 export default function App() {
   // State
@@ -66,10 +39,7 @@ export default function App() {
   // Search state
   const [searchQuery, setSearchQuery] = useState('');
 
-  // Sound toggle
-  const [soundEnabled, setSoundEnabled] = useState(false);
-  const soundEnabledRef = useRef(false);
-  useEffect(() => { soundEnabledRef.current = soundEnabled; }, [soundEnabled]);
+
 
   const blurRef = useRef(null);
   const mirageRef = useRef(null);
@@ -102,10 +72,6 @@ export default function App() {
         case '?':
           setShowHowItWorks(prev => !prev);
           break;
-        case 's':
-        case 'S':
-          if (!e.ctrlKey && !e.metaKey) setSoundEnabled(prev => !prev);
-          break;
         default: break;
       }
     };
@@ -126,7 +92,6 @@ export default function App() {
     // Blur trade stream
     const offTrade = blur.on('trade', (trade) => {
       setTrades(prev => [trade, ...prev].slice(0, 200));
-      if (soundEnabledRef.current) playSound('trade');
     });
 
     const offBlurStatus = blur.on('status', (status) => {
@@ -136,7 +101,6 @@ export default function App() {
     // Whale events
     const offWhale = blur.on('whale', (trade) => {
       setWhales(prev => [trade, ...prev].slice(0, 50));
-      if (soundEnabledRef.current) playSound('whale');
     });
 
     // Start Blur stream
@@ -266,14 +230,6 @@ export default function App() {
         </div>
 
         <div className="header-right-group">
-          {/* Sound toggle */}
-          <button
-            className={`header-btn sound-toggle ${soundEnabled ? 'active' : ''}`}
-            onClick={() => setSoundEnabled(!soundEnabled)}
-            title={soundEnabled ? 'Sound ON (S)' : 'Sound OFF (S)'}
-          >
-            {soundEnabled ? '🔊' : '🔇'}
-          </button>
 
           {/* How It Works */}
           <button
