@@ -1,7 +1,7 @@
 import { useEffect, useRef, useCallback, useState } from 'react';
 import { DEX_COLORS } from '../../utils/constants.js';
 import { formatUsd, formatNumber } from '../../utils/formatters.js';
-import { DEX_LOGOS } from '../../utils/dexLogos.js';
+import { DEX_LOGOS, DEX_LOGO_FALLBACKS } from '../../utils/dexLogos.js';
 
 /* ── Flow Map Node / Particle definitions ── */
 
@@ -87,7 +87,7 @@ export default function FlowMap({ trades, dexFlows }) {
   const [hoveredNode, setHoveredNode] = useState(null);
   const [tooltip, setTooltip] = useState(null);
 
-  // Preload DEX logo images
+  // Preload DEX logo images with fallback
   useEffect(() => {
     Object.entries(DEX_LOGOS).forEach(([name, url]) => {
       const img = new Image();
@@ -96,7 +96,15 @@ export default function FlowMap({ trades, dexFlows }) {
         dexImagesRef.current.set(name, img);
       };
       img.onerror = () => {
-        // Will use letter fallback
+        // Try inline SVG fallback
+        const fallbackUrl = DEX_LOGO_FALLBACKS[name];
+        if (fallbackUrl) {
+          const fallbackImg = new Image();
+          fallbackImg.onload = () => {
+            dexImagesRef.current.set(name, fallbackImg);
+          };
+          fallbackImg.src = fallbackUrl;
+        }
       };
       img.src = url;
     });

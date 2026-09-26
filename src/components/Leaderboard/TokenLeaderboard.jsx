@@ -39,14 +39,14 @@ function VolumeBar({ ratio, color }) {
   );
 }
 
-function TokenRow({ token, maxVolume }) {
+function TokenRow({ token, maxVolume, onClick }) {
   const changeDir = token.change24h >= 0 ? 'up' : 'down';
   const color = getTokenColor(token.symbol);
   const volRatio = maxVolume > 0 ? token.volume24h / maxVolume : 0;
   const isHot = Math.abs(token.change24h) > 10;
 
   return (
-    <div className="token-row" title={`${token.name} — ${formatPrice(token.price)}`}>
+    <div className="token-row" title={`${token.name} — ${formatPrice(token.price)}`} onClick={() => onClick?.(token)} style={{ cursor: onClick ? 'pointer' : 'default' }}>
       <VolumeBar ratio={volRatio} color={color} />
       <div className="token-row-inner">
         <div className={`token-rank ${token.rank <= 3 ? 'top-3' : ''}`}>
@@ -82,7 +82,7 @@ function TokenRow({ token, maxVolume }) {
   );
 }
 
-export default function TokenLeaderboard({ leaderboard }) {
+export default function TokenLeaderboard({ leaderboard, onTokenClick }) {
   const maxVolume = useMemo(() => {
     if (!leaderboard || leaderboard.length === 0) return 0;
     return Math.max(...leaderboard.map(t => t.volume24h));
@@ -111,7 +111,7 @@ export default function TokenLeaderboard({ leaderboard }) {
         <span style={{ textAlign: 'right' }}>24h</span>
       </div>
       {items.map(token => (
-        <TokenRow key={token.symbol} token={token} maxVolume={maxVolume} />
+        <TokenRow key={token.symbol} token={token} maxVolume={maxVolume} onClick={onTokenClick} />
       ))}
     </div>
   );

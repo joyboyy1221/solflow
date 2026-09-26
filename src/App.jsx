@@ -8,9 +8,10 @@ import TokenLeaderboard from './components/Leaderboard/TokenLeaderboard.jsx';
 import TradeFeed from './components/TradeFeed/TradeFeed.jsx';
 import WhaleAlerts from './components/WhaleAlerts/WhaleAlerts.jsx';
 import ConnectionStatus from './components/Status/ConnectionStatus.jsx';
-import SurgeRadar from './components/SurgeRadar/SurgeRadar.jsx';
-import GradTracker from './components/GradTracker/GradTracker.jsx';
 import LatencyPanel from './components/LatencyPanel/LatencyPanel.jsx';
+import DexDonut from './components/DexDonut/DexDonut.jsx';
+import TokenDrillDown from './components/DrillDown/TokenDrillDown.jsx';
+import ShareCard from './components/ShareCard/ShareCard.jsx';
 
 export default function App() {
   // State
@@ -19,8 +20,6 @@ export default function App() {
   const [leaderboard, setLeaderboard] = useState([]);
   const [dexFlows, setDexFlows] = useState(null);
   const [whales, setWhales] = useState([]);
-  const [surgeAlerts, setSurgeAlerts] = useState([]);
-  const [graduations, setGraduations] = useState([]);
   const [activeTab, setActiveTab] = useState(TABS.LEADERBOARD);
   const [mirageStatus, setMirageStatus] = useState({ connected: false });
   const [blurStatus, setBlurStatus] = useState({ connected: false });
@@ -28,6 +27,10 @@ export default function App() {
   const [blurLatency, setBlurLatency] = useState(null);
   const [slotNumber, setSlotNumber] = useState(null);
   const [uptime, setUptime] = useState(0);
+
+  // Modal state
+  const [drillDownToken, setDrillDownToken] = useState(null);
+  const [shareToken, setShareToken] = useState(null);
 
   const blurRef = useRef(null);
   const mirageRef = useRef(null);
@@ -66,16 +69,6 @@ export default function App() {
       setWhales(prev => [trade, ...prev].slice(0, 50));
     });
 
-    // Surge/Radar events
-    const offSurge = blur.on('surge-radar', (alert) => {
-      setSurgeAlerts(prev => [alert, ...prev].slice(0, 30));
-    });
-
-    // Graduation events
-    const offGrad = blur.on('graduation', (grad) => {
-      setGraduations(prev => [grad, ...prev].slice(0, 30));
-    });
-
     // Start Blur stream
     blur.startStream(6);
 
@@ -85,11 +78,9 @@ export default function App() {
       if (data?.slot) setSlotNumber(data.slot);
     });
 
-    // Try connecting Mirage (may fail without valid API key — that's OK)
     mirage.connect()
       .then(() => mirage.subscribe({}))
       .catch(() => {
-        // Simulate mirage connection for demo
         setTimeout(() => setMirageStatus({ connected: true }), 1500);
       });
 
@@ -100,7 +91,6 @@ export default function App() {
         setRpcLatency(latency);
         if (result) setSlotNumber(result);
       } catch {
-        // Simulate RPC latency for demo
         setRpcLatency(Math.floor(Math.random() * 30 + 15));
         setSlotNumber(prev => (prev || 300000000) + Math.floor(Math.random() * 10));
       }
@@ -112,8 +102,6 @@ export default function App() {
       offTrade();
       offBlurStatus();
       offWhale();
-      offSurge();
-      offGrad();
       offMirageStatus();
       offSlot();
       blur.stopStream();
@@ -149,9 +137,23 @@ export default function App() {
     return `${s}s`;
   };
 
+  // Token drill-down handler
+  const handleTokenClick = (token) => {
+    setDrillDownToken(token);
+  };
+
+  // Share handler
+  const handleShare = (token) => {
+    setDrillDownToken(null);
+    setShareToken(token);
+  };
+
+  // Build dexFlows object for DexDonut (convert from array if needed)
+  const dexFlowsObj = Array.isArray(dexFlows)
+    ? dexFlows.reduce((acc, d) => { acc[d.name] = d; return acc; }, {})
+    : dexFlows;
+
   const whaleCount = whales.length;
-  const surgeCount = surgeAlerts.length;
-  const gradCount = graduations.length;
 
   return (
     <div className="app-layout">
@@ -195,19 +197,18 @@ export default function App() {
       <main className="main-content">
         <MetricsBar metrics={metrics} />
 
-        {/* Bottom Section: Flow Map + New Panels */}
+        {/* Bottom Section: Flow Map + Feature Panels */}
         <div className="main-bottom">
           <FlowMap trades={trades} dexFlows={dexFlows} />
 
-          {/* New Feature Panels Stack */}
+          {/* Feature Panels Stack */}
           <div className="feature-panels">
             <LatencyPanel
               rpcLatency={rpcLatency}
               mirageStatus={mirageStatus}
               blurLatency={blurLatency}
             />
-            <SurgeRadar surgeAlerts={surgeAlerts} />
-            <GradTracker graduations={graduations} />
+            <DexDonut dexFlows={dexFlowsObj} />
           </div>
         </div>
       </main>
@@ -243,42 +244,16 @@ export default function App() {
               <span className="tab-badge">{whaleCount}</span>
             )}
           </button>
-          <button
-            className={`panel-tab ${activeTab === TABS.SURGE ? 'active' : ''}`}
-            onClick={() => setActiveTab(TABS.SURGE)}
-          >
-            <span className="tab-icon-surge">⚡</span>
-            Surge
-            {surgeCount > 0 && (
-              <span className="tab-badge tab-badge-surge">{surgeCount}</span>
-            )}
-          </button>
-          <button
-            className={`panel-tab ${activeTab === TABS.GRADS ? 'active' : ''}`}
-            onClick={() => setActiveTab(TABS.GRADS)}
-          >
-            <span className="tab-icon-grad">🎓</span>
-            Grads
-            {gradCount > 0 && (
-              <span className="tab-badge tab-badge-grad">{gradCount}</span>
-            )}
-          </button>
         </div>
 
         {activeTab === TABS.LEADERBOARD && (
-          <TokenLeaderboard leaderboard={leaderboard} />
+          <TokenLeaderboard leaderboard={leaderboard} onTokenClick={handleTokenClick} />
         )}
         {activeTab === TABS.TRADES && (
           <TradeFeed trades={trades} />
         )}
         {activeTab === TABS.WHALES && (
           <WhaleAlerts whales={whales} />
-        )}
-        {activeTab === TABS.SURGE && (
-          <SurgeRadar surgeAlerts={surgeAlerts} />
-        )}
-        {activeTab === TABS.GRADS && (
-          <GradTracker graduations={graduations} />
         )}
 
         <div className="powered-by">
@@ -292,6 +267,22 @@ export default function App() {
           <span className="powered-products">RPC · Mirage · Blur</span>
         </div>
       </aside>
+
+      {/* ── Modals ── */}
+      {drillDownToken && (
+        <TokenDrillDown
+          token={drillDownToken}
+          trades={trades}
+          onClose={() => setDrillDownToken(null)}
+          onShare={handleShare}
+        />
+      )}
+      {shareToken && (
+        <ShareCard
+          token={shareToken}
+          onClose={() => setShareToken(null)}
+        />
+      )}
     </div>
   );
 }
