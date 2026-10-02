@@ -249,20 +249,24 @@ function generateSimulatedTrade() {
   }
 
   const token = tokens[idx];
-  const isBuy = Math.random() > 0.48;
-  const isWhale = Math.random() < 0.03;
+  const isBuy = Math.random() > 0.46;
+  const isWhale = Math.random() < 0.06;
 
-  token.price = Math.max(token.price * 0.5, token.price + (Math.random() - 0.5) * 0.004 * token.price);
+  // Realistic price movement: ±0.5-1.5% per trade with momentum
+  const momentum = isBuy ? 1 : -1;
+  const volatility = 0.005 + Math.random() * 0.01; // 0.5% to 1.5%
+  const priceChange = momentum * volatility * token.price;
+  token.price = Math.max(token.basePrice * 0.3, Math.min(token.basePrice * 3, token.price + priceChange));
   token.priceHistory.push(token.price);
   if (token.priceHistory.length > 24) token.priceHistory.shift();
 
-  const sizeUsd = isWhale ? Math.random() * 200_000 + 10_000 : Math.random() * 5_000 + 10;
+  const sizeUsd = isWhale ? Math.random() * 300_000 + 10_000 : Math.random() * 8_000 + 20;
   const dex = pickWeightedDex();
 
   token.volume24h += sizeUsd;
   token.trades24h += 1;
-  token.change24h += (isBuy ? 0.01 : -0.01);
-  token.buyPressure = Math.max(0.1, Math.min(0.9, token.buyPressure + (isBuy ? 0.002 : -0.002)));
+  token.change24h = ((token.price - token.basePrice) / token.basePrice) * 100;
+  token.buyPressure = Math.max(0.15, Math.min(0.85, token.buyPressure + (isBuy ? 0.005 : -0.005)));
 
   const ds = dexVolume.get(dex);
   if (ds) {
@@ -270,6 +274,10 @@ function generateSimulatedTrade() {
     ds.trades += 1;
     if (isBuy) ds.buyVolume += sizeUsd; else ds.sellVolume += sizeUsd;
   }
+
+  // Generate realistic-looking fake tx signature and mint
+  const fakeSig = Array.from({ length: 64 }, () => '0123456789abcdef'[Math.floor(Math.random() * 16)]).join('');
+  const fakeMint = Array.from({ length: 44 }, () => 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz123456789'[Math.floor(Math.random() * 58)]).join('');
 
   return {
     id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
@@ -282,6 +290,8 @@ function generateSimulatedTrade() {
     sizeTokens: sizeUsd / token.price,
     dex,
     isWhale,
+    txSignature: fakeSig,
+    mint: fakeMint,
     source: 'simulation',
   };
 }
