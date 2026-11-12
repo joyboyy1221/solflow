@@ -105,8 +105,16 @@ npm install
 
 ```bash
 cp .env.example .env
-# Edit .env and add: SOLAMI_API_KEY=your_key_here
 ```
+
+Then edit `.env` and set both lines to your Solami key:
+
+```bash
+VITE_SOLAMI_API_KEY=your_key_here
+SOLAMI_API_KEY=your_key_here
+```
+
+`VITE_SOLAMI_API_KEY` is what the app reads on a local run. Without it the app shows simulated data.
 
 ### 4. Run
 
