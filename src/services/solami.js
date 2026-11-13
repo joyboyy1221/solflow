@@ -796,7 +796,7 @@ export class SolamiBlur {
       const timeout = setTimeout(() => {
         if (this.eventSource) this.eventSource.close();
         reject(new Error('Server SSE stream timeout'));
-      }, 6000);
+      }, 8000);
 
       try {
         this.eventSource = new EventSource('/api/stream');
@@ -818,25 +818,29 @@ export class SolamiBlur {
           }
         };
 
-        // The HTTP stream opening only proves our own server answered.
-        // We report "live" once the server confirms the Solami socket is open.
+        // Neither the HTTP stream opening nor the upstream socket opening proves
+        // data is flowing (Solami can accept a socket and close it straight away,
+        // e.g. for an expired key). We report "live" on the first real event.
+        const markLive = () => {
+          if (this.isLive) return;
+          clearTimeout(timeout);
+          this.connected = true;
+          this.isLive = true;
+          this.reconnectAttempts = 0;
+          this._emit('status', { connected: true, live: true });
+          if (!settled) { settled = true; resolve(); }
+        };
+
         this.eventSource.onmessage = (event) => {
           try {
             const msg = JSON.parse(event.data);
-            if (msg.status === 'connected') {
-              clearTimeout(timeout);
-              this.connected = true;
-              this.isLive = true;
-              this.reconnectAttempts = 0;
-              this._emit('status', { connected: true, live: true });
-              if (!settled) { settled = true; resolve(); }
-              return;
-            }
+            if (msg.status === 'connected') return;
             if (msg.status === 'disconnected' || msg.status === 'error') {
               fail('Solami stream closed by upstream');
               return;
             }
             if (msg.error) return;
+            markLive();
 
             // Route through unified processor
             if (Array.isArray(msg)) {
