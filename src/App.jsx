@@ -27,6 +27,8 @@ export default function App() {
   const [mirageStatus, setMirageStatus] = useState({ connected: false });
   const [blurStatus, setBlurStatus] = useState({ connected: false });
   const [rpcLatency, setRpcLatency] = useState(null);
+  const [rpcDown, setRpcDown] = useState(false);
+  const [mirageLatency, setMirageLatency] = useState(null);
   const [blurLatency, setBlurLatency] = useState(null);
   const [slotNumber, setSlotNumber] = useState(null);
   const [uptime, setUptime] = useState(0);
@@ -107,7 +109,11 @@ export default function App() {
     blur.startStream(6);
 
     // Mirage connection
-    const offMirageStatus = mirage.on('status', setMirageStatus);
+    const offMirageStatus = mirage.on('status', (status) => {
+      setMirageStatus(status);
+      if (!status.connected) setMirageLatency(null);
+    });
+    const offMirageLatency = mirage.on('latency', setMirageLatency);
     const offSlot = mirage.on('slot', (data) => {
       if (data?.slot) setSlotNumber(data.slot);
     });
@@ -115,7 +121,7 @@ export default function App() {
     mirage.connect()
       .then(() => mirage.subscribe({}))
       .catch(() => {
-        setTimeout(() => setMirageStatus({ connected: true }), 1500);
+        // Not connected stays not connected — the status event already says why
       });
 
     // RPC ping
@@ -123,10 +129,12 @@ export default function App() {
       try {
         const { result, latency } = await rpc.getSlot();
         setRpcLatency(latency);
+        setRpcDown(false);
         if (result) setSlotNumber(result);
       } catch {
-        setRpcLatency(Math.floor(Math.random() * 30 + 15));
-        setSlotNumber(prev => (prev || 300000000) + Math.floor(Math.random() * 10));
+        // No measurement, so show none
+        setRpcLatency(null);
+        setRpcDown(true);
       }
     };
     pingRpc();
@@ -137,6 +145,7 @@ export default function App() {
       offBlurStatus();
       offWhale();
       offMirageStatus();
+      offMirageLatency();
       offSlot();
       blur.stopStream();
       mirage.disconnect();
@@ -216,7 +225,13 @@ export default function App() {
             <circle cx="10" cy="20" r="2" fill="#a78bfa"/>
           </svg>
           <span className="logo-text">SolFlow</span>
-          <span className="logo-badge">Live</span>
+          {blurStatus.connected && blurStatus.live ? (
+            <span className="logo-badge">Live</span>
+          ) : blurStatus.connected ? (
+            <span className="logo-badge logo-badge-sim">Simulated</span>
+          ) : (
+            <span className="logo-badge logo-badge-off">Connecting</span>
+          )}
           <div className="header-meta">
             {slotNumber && (
               <span className="header-slot mono">
@@ -247,12 +262,21 @@ export default function App() {
             mirageStatus={mirageStatus}
             blurStatus={blurStatus}
             rpcLatency={rpcLatency}
+            rpcDown={rpcDown}
           />
         </div>
       </header>
 
       {/* ── Main Content ── */}
       <main className="main-content">
+        {blurStatus.connected && !blurStatus.live && (
+          <div className="sim-banner" role="status">
+            <strong>Simulated data.</strong> The Solami Blur stream is not connected, so the trades,
+            volumes and whales shown here are randomly generated for demo purposes — not real market
+            activity. Set <code>VITE_SOLAMI_API_KEY</code> (local) or <code>SOLAMI_API_KEY</code> (Vercel) to go live.
+          </div>
+        )}
+
         <MetricsBar metrics={metrics} />
 
         {/* Bottom Section: Flow Map + Feature Panels */}
@@ -263,8 +287,8 @@ export default function App() {
           <div className="feature-panels">
             <LatencyPanel
               rpcLatency={rpcLatency}
-              mirageStatus={mirageStatus}
-              blurLatency={blurLatency}
+              mirageLatency={mirageLatency}
+              blurLatency={blurStatus.live ? blurLatency : null}
             />
             <DexDonut dexFlows={dexFlowsObj} />
           </div>

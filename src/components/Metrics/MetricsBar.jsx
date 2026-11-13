@@ -118,34 +118,30 @@ function MetricsBarSkeleton() {
 }
 
 export default function MetricsBar({ metrics }) {
-  // Sparkline data simulation (rolling history)
-  const sparkRefs = useRef({
-    volume: Array.from({ length: 20 }, (_, i) => 50 + Math.sin(i * 0.5) * 20 + Math.random() * 10),
-    trades: Array.from({ length: 20 }, (_, i) => 40 + Math.cos(i * 0.3) * 15 + Math.random() * 8),
-    pools: Array.from({ length: 20 }, (_, i) => 60 + Math.sin(i * 0.4) * 10 + Math.random() * 5),
-    launches: Array.from({ length: 20 }, (_, i) => 30 + Math.sin(i * 0.6) * 20 + Math.random() * 12),
-    wallets: Array.from({ length: 20 }, (_, i) => 45 + Math.cos(i * 0.5) * 18 + Math.random() * 8),
-    buy: Array.from({ length: 20 }, (_, i) => 50 + Math.sin(i * 0.3) * 5 + Math.random() * 3),
-  });
+  // Sparklines plot the real history of each metric (one point per refresh)
+  const sparkRefs = useRef({ volume: [], trades: [], pools: [], launches: [], wallets: [], buy: [] });
 
   useEffect(() => {
-    const interval = setInterval(() => {
-      Object.keys(sparkRefs.current).forEach(key => {
-        const arr = sparkRefs.current[key];
-        const last = arr[arr.length - 1];
-        arr.push(last + (Math.random() - 0.48) * 5);
-        if (arr.length > 20) arr.shift();
-      });
-    }, 2000);
-    return () => clearInterval(interval);
-  }, []);
+    if (!metrics) return;
+    const push = (key, v) => {
+      const arr = sparkRefs.current[key];
+      arr.push(Number.isFinite(v) ? v : 0);
+      if (arr.length > 30) arr.shift();
+    };
+    push('volume', metrics.totalVolume24h);
+    push('trades', metrics.totalTrades24h);
+    push('pools', metrics.activePools);
+    push('launches', metrics.newLaunches);
+    push('wallets', metrics.uniqueWallets);
+    push('buy', metrics.buyRatio * 100);
+  }, [metrics]);
 
   if (!metrics) return <MetricsBarSkeleton />;
 
   return (
     <div className="metrics-bar">
       <MetricCard
-        label="24h Volume"
+        label="Session Volume"
         value={formatUsd(metrics.totalVolume24h, true)}
         change={metrics.volumeChange}
         icon={
@@ -157,7 +153,7 @@ export default function MetricsBar({ metrics }) {
         sparkData={sparkRefs.current.volume}
       />
       <MetricCard
-        label="Total Trades"
+        label="Session Trades"
         value={formatNumber(metrics.totalTrades24h, true)}
         change={metrics.tradesChange}
         icon={
@@ -169,7 +165,7 @@ export default function MetricsBar({ metrics }) {
         sparkData={sparkRefs.current.trades}
       />
       <MetricCard
-        label="Active Pools"
+        label="Active Tokens"
         value={formatNumber(metrics.activePools)}
         change={metrics.poolsChange}
         icon={
@@ -183,7 +179,6 @@ export default function MetricsBar({ metrics }) {
       <MetricCard
         label="New Launches"
         value={formatNumber(metrics.newLaunches)}
-        change={12.5}
         icon={
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 00-2.91-.09zM12 15l-3-3a22 22 0 012-3.95A12.88 12.88 0 0122 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 01-4 2z"/>
@@ -207,7 +202,6 @@ export default function MetricsBar({ metrics }) {
       <MetricCard
         label="Buy / Sell"
         value={`${(metrics.buyRatio * 100).toFixed(0)}% / ${((1 - metrics.buyRatio) * 100).toFixed(0)}%`}
-        change={metrics.buyRatio > 0.5 ? 1.5 : -1.5}
         icon={
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <path d="M12 3v18M3 12h18"/>

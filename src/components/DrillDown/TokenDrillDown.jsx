@@ -136,11 +136,11 @@ export default function TokenDrillDown({ token, trades = [], onClose, onShare })
         {/* Stats Grid */}
         <div className="dd-stats-grid">
           <div className="dd-stat">
-            <div className="dd-stat-label">24h Volume</div>
+            <div className="dd-stat-label">Session Volume</div>
             <div className="dd-stat-value">${formatCompactNumber(token.volume24h)}</div>
           </div>
           <div className="dd-stat">
-            <div className="dd-stat-label">24h Trades</div>
+            <div className="dd-stat-label">Session Trades</div>
             <div className="dd-stat-value">{token.trades24h?.toLocaleString() || '0'}</div>
           </div>
           <div className="dd-stat">

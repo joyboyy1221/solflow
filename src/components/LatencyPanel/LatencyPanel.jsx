@@ -1,26 +1,18 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 
 /**
  * Multi-Path Latency Comparison Panel
  * Shows live: "RPC: 458ms | Mirage: 120ms | Blur: 90ms"
  * Proves Solami's value: one API key, multiple fast paths
  */
-export default function LatencyPanel({ rpcLatency, mirageStatus, blurLatency }) {
-  const [mirageLatency, setMirageLatency] = useState(null);
+export default function LatencyPanel({ rpcLatency, mirageLatency, blurLatency }) {
   const [history, setHistory] = useState({
     rpc: [],
     mirage: [],
     blur: [],
   });
 
-  // Track mirage latency from connection status
-  useEffect(() => {
-    if (mirageStatus?.connected) {
-      // Mirage is a direct WebSocket, typically very fast
-      setMirageLatency(prev => prev || Math.floor(Math.random() * 40 + 80));
-    }
-  }, [mirageStatus]);
-
+  // Every value shown is measured; a path with no measurement shows "—"
   // Update history
   useEffect(() => {
     setHistory(prev => ({

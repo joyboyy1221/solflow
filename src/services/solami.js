@@ -1,7 +1,9 @@
 /* ═══════════════════════════════════
    Solami API Service Layer
    Handles RPC, Mirage, and Blur
-   Real data with simulation fallback
+   Real data; a clearly labelled demo
+   simulation runs only when no stream
+   can be reached
    ═══════════════════════════════════ */
 
 import { registerTokenLogo } from '../utils/tokenLogos.js';
@@ -98,27 +100,38 @@ export class SolamiMirage {
   connect() {
     return new Promise((resolve, reject) => {
       if (!this.apiKey) {
-        console.log('[SolFlow] Mirage running in server proxy mode');
-        this.connected = true;
-        this._emit('status', { connected: true });
-        return resolve();
+        // Mirage is a browser WebSocket and needs VITE_SOLAMI_API_KEY.
+        // Without it there is no connection, and we say so.
+        console.warn('[SolFlow] Mirage unavailable: VITE_SOLAMI_API_KEY is not set');
+        this.connected = false;
+        this._emit('status', { connected: false, unavailable: true });
+        return reject(new Error('Mirage needs VITE_SOLAMI_API_KEY'));
       }
 
       try {
+        const openStart = performance.now();
         this.ws = new WebSocket(this.url);
 
         this.ws.onopen = () => {
           this.connected = true;
           this.reconnectAttempts = 0;
           this._emit('status', { connected: true });
+          // Measured: time to open the WebSocket
+          this._emit('latency', Math.max(1, Math.round(performance.now() - openStart)));
           resolve();
         };
 
         this.ws.onmessage = (event) => {
           try {
             const data = JSON.parse(event.data);
+            // Measured: round trip of our own request on the open socket
+            if (this._pending && data.id === this._pending.id) {
+              this._emit('latency', Math.max(1, Math.round(performance.now() - this._pending.sentAt)));
+              this._pending = null;
+            }
             this._emit('message', data);
-            if (data.result?.slot) this._emit('slot', data.result);
+            const slotInfo = data.params?.result?.slot ? data.params.result : data.result;
+            if (slotInfo?.slot) this._emit('slot', slotInfo);
           } catch (e) { /* binary/non-JSON */ }
         };
 
@@ -141,8 +154,10 @@ export class SolamiMirage {
 
   subscribe() {
     if (this.ws?.readyState === WebSocket.OPEN) {
+      const id = Date.now();
+      this._pending = { id, sentAt: performance.now() };
       this.ws.send(JSON.stringify({
-        jsonrpc: '2.0', id: Date.now(), method: 'slotSubscribe', params: [],
+        jsonrpc: '2.0', id, method: 'slotSubscribe', params: [],
       }));
     }
   }
@@ -175,7 +190,8 @@ export class SolamiMirage {
    Tries real WebSocket first, falls back to sim
    ════════════════════════════════════════════════ */
 
-// Known DEX token definitions for simulation fallback
+// Well-known tokens (names + reference prices). All counters start at zero
+// and only grow from trades actually received this session.
 const DEX_TOKENS = [
   { symbol: 'SOL', name: 'Solana', basePrice: 124.00 },
   { symbol: 'JUP', name: 'Jupiter', basePrice: 0.34 },
@@ -208,24 +224,27 @@ DEX_TOKENS.forEach(t => {
   tokenState.set(t.symbol, {
     ...t,
     price: t.basePrice,
-    volume24h: Math.random() * 50_000_000 + 1_000_000,
-    trades24h: Math.floor(Math.random() * 50_000 + 5_000),
-    change24h: (Math.random() - 0.5) * 20,
-    buyPressure: 0.45 + Math.random() * 0.1,
-    priceHistory: Array.from({ length: 24 }, () => t.basePrice * (0.95 + Math.random() * 0.1)),
+    volume24h: 0,
+    trades24h: 0,
+    change24h: 0,
+    buyPressure: 0.5,
+    priceHistory: [t.basePrice],
   });
 });
 
 const dexVolume = new Map();
 DEX_NAMES.forEach(d => {
   dexVolume.set(d, {
-    volume: Math.random() * 20_000_000 + 2_000_000,
-    trades: Math.floor(Math.random() * 10_000 + 1_000),
+    volume: 0,
+    trades: 0,
     buyVolume: 0, sellVolume: 0,
   });
 });
 
 let previousMetrics = null;
+
+// Wallets seen in live trades this session (only filled when the stream reports them)
+const seenWallets = new Set();
 
 function pickWeightedDex() {
   const total = Object.values(DEX_WEIGHTS).reduce((a, b) => a + b, 0);
@@ -275,10 +294,6 @@ function generateSimulatedTrade() {
     if (isBuy) ds.buyVolume += sizeUsd; else ds.sellVolume += sizeUsd;
   }
 
-  // Generate realistic-looking fake tx signature and mint
-  const fakeSig = Array.from({ length: 64 }, () => '0123456789abcdef'[Math.floor(Math.random() * 16)]).join('');
-  const fakeMint = Array.from({ length: 44 }, () => 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz123456789'[Math.floor(Math.random() * 58)]).join('');
-
   return {
     id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
     timestamp: Date.now(),
@@ -290,8 +305,9 @@ function generateSimulatedTrade() {
     sizeTokens: sizeUsd / token.price,
     dex,
     isWhale,
-    txSignature: fakeSig,
-    mint: fakeMint,
+    // Simulated trades never carry a signature or mint: nothing here exists on-chain
+    txSignature: null,
+    mint: null,
     source: 'simulation',
   };
 }
@@ -418,6 +434,12 @@ function parseBlurSwapEvent(data) {
       ds.volume += sizeUsd;
       ds.trades += 1;
       if (side === 'buy') ds.buyVolume += sizeUsd; else ds.sellVolume += sizeUsd;
+    }
+
+    const wallet = safeStr(data, 'wallet', 'maker', 'signer', 'trader', 'owner', 'user', 'wallet_address');
+    if (wallet) {
+      if (seenWallets.size > 50_000) seenWallets.clear();
+      seenWallets.add(wallet);
     }
 
     // Register token logo from Blur data if provided
@@ -633,10 +655,12 @@ export class SolamiBlur {
   }
 
   /**
-   * Start trade stream — tries real Blur WebSocket first,
-   * falls back to simulation if it fails
+   * Start trade stream — tries the real Blur stream first. If no stream can
+   * be reached it runs a demo simulation, reported as { live: false } so the
+   * UI labels it as simulated.
    */
   async startStream(fallbackTradesPerSecond = 6) {
+    this._shouldReconnect = true;
     // 1. Try server-side stream proxy (/api/stream) first to keep keys hidden
     try {
       console.log('[SolFlow] Connecting via server stream proxy (/api/stream)...');
@@ -777,19 +801,41 @@ export class SolamiBlur {
       try {
         this.eventSource = new EventSource('/api/stream');
 
-        this.eventSource.onopen = () => {
+        let settled = false;
+        const fail = (reason) => {
           clearTimeout(timeout);
-          this.connected = true;
-          this.isLive = true;
-          this.reconnectAttempts = 0;
-          this._emit('status', { connected: true, live: true });
-          resolve();
+          const wasLive = this.isLive;
+          this.connected = false;
+          this.isLive = false;
+          if (this.eventSource) { this.eventSource.close(); this.eventSource = null; }
+          this._emit('status', { connected: false, live: false });
+          if (!settled) {
+            settled = true;
+            reject(new Error(reason));
+          } else if (wasLive && this._shouldReconnect) {
+            // Stream dropped after being live: start over (proxy, then direct, then demo)
+            setTimeout(() => { if (this._shouldReconnect) this.startStream(); }, 3000);
+          }
         };
 
+        // The HTTP stream opening only proves our own server answered.
+        // We report "live" once the server confirms the Solami socket is open.
         this.eventSource.onmessage = (event) => {
           try {
             const msg = JSON.parse(event.data);
-            if (msg.status === 'connected') return;
+            if (msg.status === 'connected') {
+              clearTimeout(timeout);
+              this.connected = true;
+              this.isLive = true;
+              this.reconnectAttempts = 0;
+              this._emit('status', { connected: true, live: true });
+              if (!settled) { settled = true; resolve(); }
+              return;
+            }
+            if (msg.status === 'disconnected' || msg.status === 'error') {
+              fail('Solami stream closed by upstream');
+              return;
+            }
             if (msg.error) return;
 
             // Route through unified processor
@@ -818,13 +864,7 @@ export class SolamiBlur {
           }
         };
 
-        this.eventSource.onerror = (err) => {
-          clearTimeout(timeout);
-          this.connected = false;
-          this.isLive = false;
-          this._emit('status', { connected: false, live: false });
-          reject(new Error('Server SSE stream error'));
-        };
+        this.eventSource.onerror = () => fail('Server SSE stream error');
       } catch (err) {
         clearTimeout(timeout);
         reject(err);
@@ -942,9 +982,10 @@ export class SolamiBlur {
   }
 
   /**
-   * Fallback simulation mode
+   * Demo simulation mode — always reported as live: false
    */
   _startSimulation(tradesPerSecond = 6) {
+    if (this.streamInterval) return;
     this.connected = true;
     this.isLive = false;
     this._emit('status', { connected: true, live: false });
@@ -1038,10 +1079,15 @@ export class SolamiBlur {
     const tokens = Array.from(tokenState.values());
     const totalVolume = tokens.reduce((sum, t) => sum + t.volume24h, 0);
     const totalTrades = tokens.reduce((sum, t) => sum + t.trades24h, 0);
-    const avgBuyPressure = tokens.reduce((sum, t) => sum + t.buyPressure, 0) / tokens.length;
-    const uniqueWallets = Math.floor(totalTrades * 0.35 + Math.random() * 1000);
-    const activePools = Math.floor(tokens.length * 2.5 + Math.random() * 5);
-    const newLaunches = this.graduations.filter(g => g.type === 'launch').length || Math.floor(Math.random() * 2 + 18);
+    const dexes = Array.from(dexVolume.values());
+    const buyVol = dexes.reduce((sum, d) => sum + d.buyVolume, 0);
+    const sellVol = dexes.reduce((sum, d) => sum + d.sellVolume, 0);
+    // Buy share of the volume seen this session; 50/50 until the first trade
+    const avgBuyPressure = buyVol + sellVol > 0 ? buyVol / (buyVol + sellVol) : 0.5;
+    const uniqueWallets = seenWallets.size;
+    // Tokens that actually traded this session
+    const activePools = tokens.filter(t => t.trades24h > 0).length;
+    const newLaunches = this.graduations.filter(g => g.type === 'launch').length;
 
     const current = {
       totalVolume24h: totalVolume,
@@ -1065,10 +1111,10 @@ export class SolamiBlur {
       deltas.walletsChange = previousMetrics.uniqueWallets > 0
         ? ((current.uniqueWallets - previousMetrics.uniqueWallets) / previousMetrics.uniqueWallets) * 100 : 0;
     } else {
-      deltas.volumeChange = 1.5 + Math.random() * 2;
-      deltas.tradesChange = 2.0 + Math.random() * 3;
-      deltas.poolsChange = 0.5 + Math.random();
-      deltas.walletsChange = 1.0 + Math.random() * 2;
+      deltas.volumeChange = 0;
+      deltas.tradesChange = 0;
+      deltas.poolsChange = 0;
+      deltas.walletsChange = 0;
     }
 
     previousMetrics = { ...current };

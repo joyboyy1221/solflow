@@ -1,4 +1,5 @@
-export default function ConnectionStatus({ mirageStatus, blurStatus, rpcLatency }) {
+export default function ConnectionStatus({ mirageStatus, blurStatus, rpcLatency, rpcDown }) {
+  const mirageUnavailable = mirageStatus?.unavailable;
   const mirageConnected = mirageStatus?.connected;
   const blurConnected = blurStatus?.connected;
   const blurLive = blurStatus?.live;
@@ -13,11 +14,21 @@ export default function ConnectionStatus({ mirageStatus, blurStatus, rpcLatency 
             {blurConnected ? (blurLive ? 'Live' : 'Sim') : '...'}
           </span>
         </div>
-        <div className={`conn-pill ${mirageConnected ? 'conn-live' : 'conn-connecting'}`}>
-          <div className={`status-dot ${mirageConnected ? 'connected' : 'connecting'}`} />
+        <div
+          className={`conn-pill ${mirageConnected ? 'conn-live' : mirageUnavailable ? 'conn-error' : 'conn-connecting'}`}
+          title={mirageUnavailable ? 'Mirage needs VITE_SOLAMI_API_KEY' : undefined}
+        >
+          <div className={`status-dot ${mirageConnected ? 'connected' : mirageUnavailable ? 'disconnected' : 'connecting'}`} />
           <span className="conn-label">Mirage</span>
-          <span className="conn-state">{mirageConnected ? 'Live' : '...'}</span>
+          <span className="conn-state">{mirageConnected ? 'Live' : mirageUnavailable ? 'Off' : '...'}</span>
         </div>
+        {rpcLatency === null && rpcDown && (
+          <div className="conn-pill conn-error" title="Solami RPC request failed">
+            <div className="status-dot disconnected" />
+            <span className="conn-label">RPC</span>
+            <span className="conn-state">Off</span>
+          </div>
+        )}
         {rpcLatency !== null && (
           <div className={`conn-pill ${rpcLatency < 100 ? 'conn-live' : rpcLatency < 500 ? 'conn-connecting' : 'conn-error'}`}>
             <div className={`status-dot ${rpcLatency < 100 ? 'connected' : rpcLatency < 500 ? 'connecting' : 'disconnected'}`} />

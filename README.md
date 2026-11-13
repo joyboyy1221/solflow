@@ -114,7 +114,11 @@ VITE_SOLAMI_API_KEY=your_key_here
 SOLAMI_API_KEY=your_key_here
 ```
 
-`VITE_SOLAMI_API_KEY` is what the app reads on a local run. Without it the app shows simulated data.
+`VITE_SOLAMI_API_KEY` is what the app reads on a local run. There are no keys in the source code: without your key nothing connects to Solami.
+
+**What you see is what is connected.** If the Blur stream cannot be reached, the app runs a demo simulation and says so with a yellow **Simulated** badge and banner. RPC and Mirage show **Off** and no latency when they are not connected; every latency number on screen is measured. Volumes and trade counts start at zero and count only trades received in the current session.
+
+On Vercel, set `SOLAMI_API_KEY` for the `/api` functions (RPC and Blur). Mirage is a direct browser WebSocket, so it also needs `VITE_SOLAMI_API_KEY` set at build time — note that this key is then visible in the browser.
 
 ### 4. Run
 

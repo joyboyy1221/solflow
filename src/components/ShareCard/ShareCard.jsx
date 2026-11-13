@@ -96,7 +96,7 @@ export default function ShareCard({ token, onClose }) {
             {/* Stats */}
             <div className="share-card-stats">
               <div className="share-stat">
-                <span className="share-stat-label">24h Volume</span>
+                <span className="share-stat-label">Session Volume</span>
                 <span className="share-stat-value">${formatCompactNumber(token.volume24h)}</span>
               </div>
               <div className="share-stat">

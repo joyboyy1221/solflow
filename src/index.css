@@ -3262,3 +3262,33 @@ body::after {
   }
 }
 
+
+/* ── Data-source honesty: simulated / offline states ── */
+.logo-badge-sim {
+  color: var(--accent-gold);
+  background: rgba(251, 191, 36, 0.12);
+  border-color: rgba(251, 191, 36, 0.35);
+}
+.logo-badge-off {
+  color: var(--text-muted, #94a3b8);
+  background: rgba(148, 163, 184, 0.1);
+  border-color: rgba(148, 163, 184, 0.25);
+}
+.logo-badge-sim::before,
+.logo-badge-off::before { display: none; }
+
+.sim-banner {
+  flex-shrink: 0;
+  padding: 8px 14px;
+  font-size: 0.75rem;
+  line-height: 1.4;
+  color: var(--accent-gold);
+  background: rgba(251, 191, 36, 0.1);
+  border: 1px solid rgba(251, 191, 36, 0.3);
+  border-radius: 8px;
+}
+.sim-banner code {
+  font-family: var(--font-mono, monospace);
+  font-size: 0.7rem;
+}
+.conn-error .conn-state { color: var(--accent-red); font-weight: 600; }

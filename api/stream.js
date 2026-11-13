@@ -3,12 +3,22 @@ export const config = {
 };
 
 export default function handler(req, res) {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+
+  const dataKey = process.env.SOLAMI_DATA_KEY || process.env.VITE_SOLAMI_DATA_KEY
+    || process.env.SOLAMI_API_KEY || process.env.VITE_SOLAMI_API_KEY;
+  if (!dataKey) {
+    // A non-200 reply makes the browser's EventSource fail, so the client
+    // never mistakes a keyless server for a live stream.
+    res.statusCode = 503;
+    res.setHeader('Content-Type', 'application/json');
+    res.end(JSON.stringify({ error: 'SOLAMI_DATA_KEY / SOLAMI_API_KEY is not set on the server' }));
+    return;
+  }
+
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache, no-transform');
   res.setHeader('Connection', 'keep-alive');
-  res.setHeader('Access-Control-Allow-Origin', '*');
-
-  const dataKey = process.env.SOLAMI_DATA_KEY || process.env.VITE_SOLAMI_DATA_KEY || 'sk_0_h0c-ej0GMLeICeCJTRB0BHJW1oXK7PnZVeKb8Z_KQ';
 
   const wsUrl = `wss://ws.solami.dev/data/subscribe?chain=solana&api_key=${dataKey}`;
   const ws = new WebSocket(wsUrl);
@@ -33,8 +43,8 @@ export default function handler(req, res) {
     }
   };
 
-  ws.onerror = (err) => {
-    res.write(`data: ${JSON.stringify({ error: 'WebSocket error' })}\n\n`);
+  ws.onerror = () => {
+    res.write(`data: ${JSON.stringify({ status: 'error', error: 'Upstream Solami WebSocket error' })}\n\n`);
   };
 
   ws.onclose = () => {
