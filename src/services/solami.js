@@ -661,6 +661,12 @@ export class SolamiBlur {
    */
   async startStream(fallbackTradesPerSecond = 6) {
     this._shouldReconnect = true;
+    // Each start/stop gets a number. A start that was stopped or replaced while
+    // it was still connecting must not go on to open a second connection
+    // (React StrictMode mounts twice in `npm run dev`).
+    const gen = this._streamGen = (this._streamGen || 0) + 1;
+    const stale = () => gen !== this._streamGen;
+
     // 1. Try server-side stream proxy (/api/stream) first to keep keys hidden
     try {
       console.log('[SolFlow] Connecting via server stream proxy (/api/stream)...');
@@ -668,6 +674,7 @@ export class SolamiBlur {
       console.log('[SolFlow] ✅ Connected to LIVE stream via server proxy!');
       return;
     } catch (sseErr) {
+      if (stale()) return;
       console.warn('[SolFlow] Server stream proxy unavailable:', sseErr.message);
     }
 
@@ -679,6 +686,7 @@ export class SolamiBlur {
         console.log('[SolFlow] ✅ Connected to LIVE Blur data via Direct WebSocket!');
         return;
       } catch (err) {
+        if (stale()) return;
         console.warn('[SolFlow] Direct Blur WebSocket failed:', err.message);
       }
     } else {
@@ -793,21 +801,29 @@ export class SolamiBlur {
    */
   _connectSseStream() {
     return new Promise((resolve, reject) => {
+      let es = null;
       const timeout = setTimeout(() => {
-        if (this.eventSource) this.eventSource.close();
+        if (es) es.close();
+        if (this.eventSource === es) this.eventSource = null;
         reject(new Error('Server SSE stream timeout'));
       }, 8000);
 
       try {
-        this.eventSource = new EventSource('/api/stream');
+        es = this.eventSource = new EventSource('/api/stream');
 
         let settled = false;
         const fail = (reason) => {
           clearTimeout(timeout);
+          es.close();
+          if (this.eventSource !== es) {
+            // A newer connection has taken over; leave its state alone
+            if (!settled) { settled = true; reject(new Error(reason)); }
+            return;
+          }
           const wasLive = this.isLive;
           this.connected = false;
           this.isLive = false;
-          if (this.eventSource) { this.eventSource.close(); this.eventSource = null; }
+          this.eventSource = null;
           this._emit('status', { connected: false, live: false });
           if (!settled) {
             settled = true;
@@ -831,7 +847,7 @@ export class SolamiBlur {
           if (!settled) { settled = true; resolve(); }
         };
 
-        this.eventSource.onmessage = (event) => {
+        es.onmessage = (event) => {
           try {
             const msg = JSON.parse(event.data);
             if (msg.status === 'connected') return;
@@ -868,7 +884,7 @@ export class SolamiBlur {
           }
         };
 
-        this.eventSource.onerror = () => fail('Server SSE stream error');
+        es.onerror = () => fail('Server SSE stream error');
       } catch (err) {
         clearTimeout(timeout);
         reject(err);
@@ -1012,6 +1028,7 @@ export class SolamiBlur {
 
   stopStream() {
     this._shouldReconnect = false;
+    this._streamGen = (this._streamGen || 0) + 1;
     if (this.streamInterval) {
       clearInterval(this.streamInterval);
       this.streamInterval = null;
